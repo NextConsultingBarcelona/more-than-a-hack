@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(//Users/DITTNAVN/MTAH-data/**)"
+    ]
+  }
+}

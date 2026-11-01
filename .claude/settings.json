@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./data/**)",
+      "Read(./evaluation/gt/**)",
+      "Edit(./data/**)",
+      "Edit(./evaluation/gt/**)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./.claude/**)",
+      "Edit(./.githooks/**)",
+      "Edit(./tools/check_no_data.py)",
+      "Edit(./tools/setup_guards.py)",
+      "Edit(./tools/test_guards.py)"
+    ],
+    "ask": [
+      "Bash(git push *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=$(command -v python || command -v python3); exec \"$PY\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_paths.py\"",
+            "timeout": 20,
+            "onFailure": "block",
+            "statusMessage": "MTAH-sperre sjekker..."
+          }
+        ]
+      }
+    ]
+  }
+}

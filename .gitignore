@@ -88,3 +88,5 @@ test_data/
 .claude/settings.local.json
 .claude/data_dirs.local.txt
 # <<< MTAH-sperrer <<<
+
+ext_data/

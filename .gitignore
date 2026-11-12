@@ -62,3 +62,29 @@ __pycache__/
 venv/
 env/
 .DS_Store
+
+# >>> MTAH-sperrer: aldri commit kampdata (lagt til av install.py) >>>
+data/
+evaluation/gt/
+real_data/
+raw_data/
+test_data/
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.m4v
+*.webm
+*.mpg
+*.mpeg
+*.wmv
+*homograph*.csv
+*tracking*.xml
+*tracking*.txt
+*tracking*.csv
+*smart*tagging*.xml
+*smart*tagging*.csv
+*.parquet
+.claude/settings.local.json
+.claude/data_dirs.local.txt
+# <<< MTAH-sperrer <<<

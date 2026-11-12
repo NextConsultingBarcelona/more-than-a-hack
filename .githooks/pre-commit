@@ -1,0 +1,8 @@
+#!/bin/sh
+# MTAH pre-commit: stopper commit av datafiler. Fungerer på Windows (Git Bash) og Mac.
+PY=$(command -v python || command -v python3)
+if [ -z "$PY" ]; then
+  echo "pre-commit: fant ikke Python. Commit stoppet (sperren feiler lukket)." >&2
+  exit 1
+fi
+exec "$PY" tools/check_no_data.py

@@ -52,4 +52,4 @@ Nye svar legges inn i `docs/organizer_answers.md` (uten data). [SJEKK: hvem føl
 - **`tools/check_no_data.py` har sin egen liste** over sperrede mapper (`FORBIDDEN_DIRS = ("data/", "evaluation/gt/")`). Listen mangler `evaluation/results/` og `ext_data/`. Dette dekkes i dag bare av `.gitignore` (`ext_data/`, `*.parquet`, `evaluation/results/*.csv` unntatt `baseline_*`). Anbefaling: et menneske legger begge mappene til i listen. Filen er låst for Claude.
 - **`requirements.txt` er ikke låst** (`numpy`, `pandas` uten versjon). Det må fikses før C1.
 - **Arrangørens 5-minuttersfasit og baseline-svarene** (`evaluation/gt/`, `evaluation/results/baseline_*.csv`) ligger i repoet fra den første kopien av arrangørens repo. Det er arrangørens egne offentlige filer, så det er OK etter D5. Ikke commit nye filer der.
-- **I Sportec-fasiten** blir frames med ball i spill uten registrert eier satt til `A`. Se `[SJEKK]` i `NEXT.md` 4.1.
+

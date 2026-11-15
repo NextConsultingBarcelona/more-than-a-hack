@@ -3,6 +3,7 @@
 Steg:
   1. Last inn kampen med kloppy (only_alive=False).
   2. Lag fasit per frame: D = død ball, ellers H/A etter ball-eiende lag (hjemmelag = H).
+       Løse baller (ingen eier) beholder forrige lag i samme omgang (fill_owner).
   3. Gjør dataene dårligere så de ligner konkurransedataene (fast seed).
   4. Skriv ext_data/<kamp>/tracking.parquet, slots.csv, gt.csv og info.json.
 
@@ -63,7 +64,10 @@ def load_sportec(match_id):
     for i, f in enumerate(frames):
         period[i] = f.period.id
         alive[i] = str(f.ball_state).lower().endswith("alive")
-        owner[i] = "H" if (f.ball_owning_team is not None and f.ball_owning_team.team_id == home.team_id) else "A"
+        if f.ball_owning_team is None:
+            owner[i] = None  # løs ball - fylles inn i fill_owner()
+        else:
+            owner[i] = "H" if f.ball_owning_team.team_id == home.team_id else "A"        
         if f.ball_coordinates is not None:
             ball[i] = (f.ball_coordinates.x, f.ball_coordinates.y)
         for player, pdata in f.players_data.items():
@@ -139,9 +143,28 @@ def layout(clean):
     return pos + C.POST_FRAMES, idx
 
 
+def fill_owner(owner, period):
+    """Fyll frames uten eier (løse baller) etter arrangørens regel.
+
+    Laget som sist hadde ballen beholder den: fyll med forrige kjente eier i
+    samme omgang. Har omgangen ingen eier ennå (helt i starten), bruk neste
+    kjente eier. Fyller aldri på tvers av omganger. Er en hel omgang uten
+    eier, blir rammene "X" (vi gjetter ikke).
+
+    Eksempel: H, None, None, A  ->  H, H, H, A
+    """
+    s = pd.Series(owner, dtype=object)
+    filled = s.groupby(np.asarray(period)).transform(lambda g: g.ffill().bfill())
+    if filled.isna().any():
+        print("  ADVARSEL: {} frames i omganger helt uten eier -> X".format(int(filled.isna().sum())))
+        filled = filled.fillna("X")
+    return filled.to_numpy(dtype=object)
+
+
 def make_gt(clean, n_total, idx):
     labels = np.full(n_total, "X", dtype=object)
-    labels[idx] = np.where(clean["alive"], clean["owner"], "D")
+    owner = fill_owner(clean["owner"], clean["period"])
+    labels[idx] = np.where(clean["alive"], owner, "D")
     return pd.DataFrame({"frame": np.arange(n_total), "label": labels})
 
 

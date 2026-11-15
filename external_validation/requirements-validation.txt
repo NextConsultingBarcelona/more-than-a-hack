@@ -1,0 +1,3 @@
+# Ekstra pakker for ekstern validering (i tillegg til repoets requirements.txt)
+kloppy==3.19.1
+pyarrow>=14

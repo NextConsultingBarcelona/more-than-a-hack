@@ -1,0 +1,6 @@
+{
+  "model": "external_validation.example_baseline:predict",
+  "grid": {
+    "window": [1, 25, 50, 125]
+  }
+}

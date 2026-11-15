@@ -4,6 +4,7 @@ Steg:
   1. Last inn kampen med kloppy (only_alive=False).
   2. Lag fasit per frame: D = død ball, ellers H/A etter ball-eiende lag (hjemmelag = H).
        Løse baller (ingen eier) beholder forrige lag i samme omgang (fill_owner).
+       Korte lagbytter uten kontroll (< MIN_CONTROLLED_S) regnes ikke som bytte (controlled_owner).
   3. Gjør dataene dårligere så de ligner konkurransedataene (fast seed).
   4. Skriv ext_data/<kamp>/tracking.parquet, slots.csv, gt.csv og info.json.
 
@@ -161,10 +162,44 @@ def fill_owner(owner, period):
     return filled.to_numpy(dtype=object)
 
 
-def make_gt(clean, n_total, idx):
+def controlled_owner(labels, min_frames):
+    """Fjern lagbytter uten kontrollert ballbesittelse (arrangørens regel, CHALLENGE.md).
+
+    Sportec bytter eier på korte berøringer. Arrangøren regner ikke en berøring uten kontroll,
+    en avretting eller en vunnet hodeduell som et bytte; "kontroll" er f.eks. at laget holder
+    ballen i noen sekunder. Derfor: en lagperiode kortere enn min_frames som ligger rett mellom
+    to perioder til det ANDRE laget (ballen i spill hele tiden) regnes til det andre laget.
+    Korteste først, til ingen er igjen. Perioder ved siden av dødball (D) eller X røres ikke:
+    etter en stopp har ett lag alltid ballen.
+
+    Eksempel (min_frames=3): H H H A H H H -> H H H H H H H,  D A H H H -> uendret.
+    """
+    labels = np.array(labels, dtype=object)
+    if min_frames <= 1 or len(labels) < 3:
+        return labels
+    while True:
+        change = np.flatnonzero(labels[1:] != labels[:-1]) + 1
+        starts = np.concatenate(([0], change))
+        ends = np.concatenate((change, [len(labels)]))
+        best = None
+        for i in range(1, len(starts) - 1):
+            here, prev, nxt = labels[starts[i]], labels[starts[i - 1]], labels[starts[i + 1]]
+            length = ends[i] - starts[i]
+            if here in ("H", "A") and prev == nxt and prev in ("H", "A") and prev != here \
+                    and length < min_frames and (best is None or length < ends[best] - starts[best]):
+                best = i
+        if best is None:
+            return labels
+        labels[starts[best]:ends[best]] = labels[starts[best - 1]]
+
+
+def make_gt(clean, n_total, idx, min_controlled_s=None):
     labels = np.full(n_total, "X", dtype=object)
     owner = fill_owner(clean["owner"], clean["period"])
     labels[idx] = np.where(clean["alive"], owner, "D")
+    if min_controlled_s is None:
+        min_controlled_s = C.MIN_CONTROLLED_S
+    labels = controlled_owner(labels, int(round(min_controlled_s * C.FPS)))
     return pd.DataFrame({"frame": np.arange(n_total), "label": labels})
 
 
@@ -331,6 +366,7 @@ def build_match(match_id, selftest=False):
     counts = gt["label"].value_counts().to_dict()
     info = dict(match_id=match_id, source=clean["source"], seed=C.SEED, n_frames=int(n_total),
                 pitch_m=[clean["length"], clean["width"]],
+                min_controlled_s=C.MIN_CONTROLLED_S,
                 labels={k: int(v) for k, v in counts.items()},
                 ball_missing_share=round(ball_missing, 3),
                 duel_share=round(duel_share, 3), near_goal_share=round(goal_share, 3),

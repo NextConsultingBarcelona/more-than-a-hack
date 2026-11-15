@@ -6,6 +6,11 @@ chosen on five open Sportec/IDSSE matches with external_validation/sweep.py and 
 external_validation/grids/next_hmm.json; two more matches were held out as a check. Nothing is
 tuned on the provided match or its public ground truth (RULES.md; docs/organizer_answers.md R9).
 
+On 15 Nov the hand-weighted evidence was replaced as decoder input by two gradient-boosted
+models trained on the same five matches (learned.py, external_validation/train_emissions.py); the
+hand-weighted evidence is now one of their inputs. The decoder scales and transition costs were
+chosen leave-one-match-out on those five matches and checked on the two held-out ones.
+
 Evidence weights are log-likelihood ratios per frame. Transition costs are negative log
 probabilities per frame, so `c_switch = 6` means "a possession change is a 1-in-400-frames event".
 """
@@ -77,10 +82,21 @@ class Config:
     s_players: float = 0.5
     w_players: float = 0.1
 
+    # --- learned evidence (learned.py), trained on open Sportec matches ------------------------
+    # Leave-one-match-out on the five tuning matches: spellF1 0.546 against 0.501 for the
+    # hand-weighted evidence; on the two held-out matches 0.582 against 0.514
+    # (external_validation/train_emissions.py). learned=False gives the earlier model back.
+    learned: bool = True           # use the trained models instead of the hand-weighted evidence
+    learned_team_scale: float = 0.4    # neighbouring frames are near-copies: count each in part
+    learned_dead_scale: float = 0.4
+    learned_clip: float = 6.0      # cap on the log-odds of a single frame
+
     # --- state model ---------------------------------------------------------------------------
-    c_switch: float = 3.0          # H <-> A
-    c_die: float = 6.5             # H/A -> D
-    c_restart: float = 6.0         # D -> H/A
+    # Chosen with the learned evidence (train_emissions.py). With learned=False the values
+    # tuned for the hand-weighted evidence were 3.0 / 6.5 / 6.0 (grids/next_hmm.json).
+    c_switch: float = 2.0          # H <-> A
+    c_die: float = 10.0            # H/A -> D
+    c_restart: float = 10.0        # D -> H/A
     min_poss_s: float = 1.0        # a shorter spell between two spells of the other team is a touch
     min_edge_s: float = 0.4        # a shorter spell next to a stoppage is noise
     min_dead_s: float = 2.0
@@ -95,6 +111,11 @@ class Config:
     refine: bool = True
     refine_team_s: float = 2.0     # search window for the first touch of the new team
     refine_dead_s: float = 1.0     # search window for ball-out and restart snaps
+
+    def hand_weighted(self):
+        """The model as it was before the learned evidence: hand-weighted evidence and the
+        transition costs tuned for it (external_validation/grids/next_hmm.json)."""
+        return replace(self, learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0)
 
     def with_(self, **changes):
         return replace(self, **changes)

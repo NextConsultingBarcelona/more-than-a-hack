@@ -40,6 +40,7 @@ Legg til nye mapper og moduler her når de opprettes.
 | `src/features.py` | Per-frame-trekk: renset og glattet ball, nærmeste spiller per lag, ballfart, spillerfart, avsparkformasjon | Oskar | Testet på falske data |
 | `src/deadball.py` | Evidens for død ball per frame (ball ute, ball i ro, avspark, dødballtagger, spillerfart) | Oskar | Testet på falske data |
 | `src/possession.py` | H/A/D-tilstandsmodell: lag-evidens, Viterbi, minstevarighet, grensejustering, igangsetter etter stopp | Oskar | Testet på falske data, tunet på Sportec |
+| `src/learned.py` | Lært evidens: trekk per frame + to tre-modeller (død/levende, hjemme/borte) kjørt i ren numpy fra `src/learned_model.json`. Trent på Sportec, aldri på konkurransekampen | Oskar | Testet på falske data, valgt på Sportec 15. nov |
 | `src/selftrain.py` | Logistisk regresjon på algoritmiske pseudo-etiketter (ingen menneskelige etiketter) | Oskar | Testet på falske data |
 | `src/config.py` | Alle parametere samlet. Fire er valgt på 5 Sportec-kamper (grid: `external_validation/grids/next_hmm.json`), 2 kamper holdt utenfor | Oskar | Tunet 15. nov |
 | `src/pipeline.py` | Limer alt sammen og skriver innleverings-CSV-en | Oskar | Ikke kjørt på ekte data |
@@ -55,7 +56,8 @@ Legg til nye mapper og moduler her når de opprettes.
 | Test sperrene | `python tools/test_guards.py` |
 | Sjekk at ingen datafiler er sporet i git | `python tools/check_no_data.py --all` |
 | Kjør testene (falske data) | `python -m pytest -q` |
-| Tun possession-modellen på Sportec | `python external_validation/sweep.py external_validation/grids/next_hmm.json` |
+| Tren lært evidens + velg dekoderverdier på Sportec (skriver `src/learned_model.json`) | `python external_validation/train_emissions.py --jobs 6` |
+| Tidligere tuning av håndvektet modell (`learned=False`) | `python external_validation/sweep.py external_validation/grids/next_hmm.json` |
 | Forsøk: tuning mot «kontrollert ballbesittelse» (ikke tatt i bruk) | sett `MIN_CONTROLLED_S = 3.0` i `external_validation/config.py`, bygg på nytt, kjør `sweep.py` med `grids/next_hmm_controlled.json` |
 | Lag innleveringen (ekte data, kun mennesker, uten Claude) | `python -m src.pipeline --team-name NEXT --no-cache` |
 | Sjekk innleverings-CSV-en (skriver bare OK/FEIL + SHA-256) | `python tools/sanity_check.py evaluation/results/NEXT.csv` |

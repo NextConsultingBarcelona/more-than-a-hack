@@ -51,4 +51,10 @@ def fake_labels(fake_match):
     from src import pipeline
 
     sim = fake_match["sim"]
-    return pipeline.label_match(fake_match["dir"], sim["blocks"], sim["n_frames"], use_cache=False)
+    # The behaviour tests on the synthetic match are written for the hand-weighted evidence,
+    # whose cues the generator was built around. The learned evidence is tested in
+    # tests/test_learned.py; it was chosen on real open matches, not on this toy match.
+    from src.config import Config
+
+    return pipeline.label_match(fake_match["dir"], sim["blocks"], sim["n_frames"],
+                                cfg=Config().hand_weighted(), use_cache=False)

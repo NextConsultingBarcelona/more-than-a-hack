@@ -1,0 +1,9 @@
+{
+  "model": "src.extval:predict",
+  "grid": {
+    "use_hint": [false, true],
+    "c_switch": [2, 3, 4, 6],
+    "touch_bonus": [0.3, 0.6],
+    "dead_clip": [0.08, 0.15]
+  }
+}

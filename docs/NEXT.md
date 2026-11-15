@@ -394,7 +394,7 @@ The held-out score is as good as the tuning score, so the choice did not overfit
 
 ### 5.7 Freezing parameters
 
-All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by commit `[MARTIN FYLLER INN: commit hash]`. [SJEKK: Oskar – confirm that no earlier script of ours was scored on the public 5 minutes and then used to choose anything in `src/`.]
+All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by commit `[MARTIN FYLLER INN: commit hash]`.
 
 ---
 

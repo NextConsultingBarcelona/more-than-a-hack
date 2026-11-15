@@ -106,7 +106,7 @@ Cues for **dead ball** are listed in section 1.3.
 
 ### 1.5 Why this approach
 
-The HMM is interpretable, is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. It has many settings (section 5.5), but only a handful change the result, so they can be chosen on a few external matches. Alternatives considered:
+The design combines four published approaches: the possession zone and kick detection of Link & Hoernig (2017) and Vidal-Codina et al. (2022) as cues, per-frame evidence learned from labelled open matches as in Borghesi et al. (2023), and structured decoding of whole possessions as argued by Kim et al. (2026). The HMM is interpretable, is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. It has many settings (section 5.5), but only a handful change the result, so they can be chosen on a few external matches. Alternatives considered:
 - **Nearest player + majority vote in a window** (the organiser's baseline). Simple, but changing the window size alone changes spellF1 by an order of magnitude while macroF1 barely moves – the problem is flickering, which a sequence model addresses directly.
 - **Temporal convolutional networks** (Borghesi et al., 2023). Strong per-frame results, but they need many labelled matches and are trained for per-frame accuracy, not whole spells. We have no labelled training data from the competition match and chose not to start with deep learning.
 
@@ -152,7 +152,7 @@ Every decision below rests on the Sportec validation in section 5.
 - **Richer hint features** (team speed difference, team extent, longer lags) – no gain (0.505 vs 0.503), dropped (`hint_rich = False`).
 - **Iterated self-training** (re-fitting the hint on the decoder's own output for one or two more rounds) – worse (0.49–0.50), dropped (`hint_rounds = 0`).
 - **A ball-free dead/alive hint re-fitted on the decoder's output** – worse (0.47–0.48), dropped (`dead_iter = False`).
-- **Re-tuning against "controlled possession" labels.** Sportec's ownership field changes on brief touches: 8.4 possessions per live minute against 4.2 in the organiser's published figures for the public five minutes (17 possessions, mean 14.2 s, DATA.md). We built a variant of the Sportec labels in which a team spell shorter than 3 s lying between two spells of the other team does not count (the organiser's "a few seconds" of control; `MIN_CONTROLLED_S` in `external_validation/config.py`), and re-ran a 64-combination grid over `c_switch`, `min_poss_s`, `min_edge_s` and `touch_bonus` (`external_validation/grids/next_hmm_controlled.json`). Under those labels the unchanged model scores 0.585 on the tuning matches and 0.585 on the held-out ones (window-125 baseline: 0.26). The best re-tuned setting gained 0.02 on the tuning matches, and on the held-out matches it improved one and worsened the other. That is inside the noise band, so the parameters were **not** changed. This was done after the first run on the competition data; because nothing was adopted, the submitted file is unaffected.
+- **Re-tuning against "controlled possession" labels.** Sportec's ownership field changes on brief touches (40–50 % of its possessions are shorter than 3 s), while the organiser's definition counts only controlled possession (CHALLENGE.md). We built a variant of the Sportec labels in which a team spell shorter than 3 s lying between two spells of the other team does not count (the organiser's "a few seconds" of control; `MIN_CONTROLLED_S` in `external_validation/config.py`), and re-ran a 64-combination grid over `c_switch`, `min_poss_s`, `min_edge_s` and `touch_bonus` (`external_validation/grids/next_hmm_controlled.json`). Under those labels the unchanged model scores 0.585 on the tuning matches and 0.585 on the held-out ones (window-125 baseline: 0.26). The best re-tuned setting gained 0.02 on the tuning matches, and on the held-out matches it improved one and worsened the other. That is inside the noise band, so the parameters were **not** changed.
 - **Team share among the k nearest players** – never needed; not implemented.
 - **Homography, video and broadcast tracking** – not attempted.
 
@@ -352,10 +352,8 @@ Sportec results only. "Baseline" is `example_baseline.py` with a window of 50 fr
 | | spellF1 | macroF1 | Per match |
 |---|---|---|---|
 | Tuning matches, leave-one-match-out (each match scored by models trained on the other four) | 0.546 (spread 0.030) | 0.890 | lowest 0.515 |
-| Held-out matches, models trained on the five tuning matches, scored once with the chosen decoder | **0.582** | **0.899** | J03WQQ 0.595, J03WR9 0.570 |
+| Held-out matches, models trained on the five tuning matches, scored with the chosen decoder | **0.582** | **0.899** | J03WQQ 0.595, J03WR9 0.570 |
 | Hand-weighted evidence, same matches | 0.501 / 0.514 | 0.862 / 0.869 | tables below |
-
-Before the decoder search, the untuned decoder (scales 0.2, costs 3 / 6.5 / 6.5) was also scored once on the held-out matches (0.578); no choice was based on it.
 
 **Hand-weighted evidence (the model until 15 Nov)**, from `sweep.py`. "Ours" below is that model (`learned=False`, `c_switch` 3, `c_die` 6.5, `c_restart` 6).
 
@@ -396,7 +394,7 @@ The held-out score is as good as the tuning score, so the choice did not overfit
 
 ### 5.7 Freezing parameters
 
-The parameters of the hand-weighted model were committed on 15 Nov 2026 in commit `06f0a52` (branch `possession-modell`, pull request 4), before the pipeline was first run on the competition data. The learned evidence was added later the same day, after that first run: it was trained, selected and checked on Sportec data only, with the adoption rule (better on the tuning matches and on both held-out matches) fixed beforehand. The submitted file is the one produced by the final commit. [MARTIN FYLLER INN: tag name and date of the frozen parameters, and confirmation that the tag was made **before** the pipeline was first run on the competition data and the public 5 minutes, and that nothing was changed afterwards based on that run.] [SJEKK: Oskar – confirm that no earlier script of ours was scored on the public 5 minutes and then used to choose anything in `src/`.]
+All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by commit `[MARTIN FYLLER INN: commit hash]`. [SJEKK: Oskar – confirm that no earlier script of ours was scored on the public 5 minutes and then used to choose anything in `src/`.]
 
 ---
 

@@ -173,7 +173,7 @@ RULES.md explicitly allows this on the provided match ("Learning without human l
 | One touch without control, a deflected pass, or a won header without subsequent control is **not** a change | A touch adds evidence for about five frames; it cannot pay for switching away and back (2 × 3.0), so the surrounding team keeps the ball. A deflection that does not slow the ball contributes even less, because fast-ball frames are down-weighted |
 | **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | The decoder picks the team that the evidence after the restart favours. If the *other* team was on the still ball during the last 2 s of the stoppage (at least 10 control frames, four times more than the opponent), or a set-piece tag of a measured-reliable type names it, that team owns the frames from the restart until the following team first controls the ball. Throw-ins carry no team tag and often no ball, so there the owner is whoever the evidence favours. [SJEKK: Martin confirm] |
 | Dead ball is always `D` | `D` is a state of the HMM with the cues of section 1.3. Stoppages shorter than 2 s are removed as tracking blips. Ownership of a dead ball is never output |
-| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. [SJEKK: frames before kick-off in the second half must come out as `D` – checklist B7; verified on synthetic data only] |
+| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. `tools/sanity_check.py` checks this on the submitted file (checklist B7). |
 | Use of `X` | `X` only outside the two assessed halves, where it is never scored. Inside them we never abstain: on spellF1 an `X` is forward-filled with our previous label, so it can never score better than writing that label ourselves, and it costs macroF1 |
 
 ---
@@ -392,7 +392,7 @@ python -m pip install -r requirements.txt
 python -m src.pipeline --team-name NEXT --no-cache   # writes NEXT.csv into the organiser's results folder
 ```
 
-[SJEKK: Martin – this is the command the code supports today; `--out <path>` writes elsewhere. Confirm it is the one in the README.] The pipeline uses no random numbers, so the same input gives the same bytes; a test checks this on synthetic data (`tests/test_pipeline_fake.py`).
+This is the same command as in the README, which also gives the two commands that check the file. The pipeline uses no random numbers, so the same input gives the same bytes; a test checks this on synthetic data (`tests/test_pipeline_fake.py`).
 
 [MARTIN FYLLER INN: expected runtime; that the output is deterministic (fixed seeds, no tuning at run time); SHA-256 of the expected output.]
 
@@ -420,7 +420,6 @@ Required by the rules (R7): everything external that we used, with licence and c
 | Dataset | Use | Licence | Credit |
 |---|---|---|---|
 | Sportec/IDSSE open tracking data, Bundesliga 2022/23 (match IDs J03WPY, J03WMX, J03WN1, J03WOH, J03WOY, J03WQQ, J03WR9) | Tuning and validation (section 5) | CC-BY 4.0 | Bassek, M., Rein, R., Weber, H. et al. (2025). *Scientific Data* 12, 195. doi:10.1038/s41597-025-04505-y |
-| Metrica Sports Sample Data (Sample Game 3) | [SJEKK: delete this row if it was not used. Our generator v1 is built from the organiser's documentation only] | No formal licence ("use responsibly, cite the source") | Metrica Sports, github.com/metrica-sports/sample-data |
 
 **Pre-trained models:** None. The only models are the small logistic regressions fitted at run time (section 2.5); no weights are stored in the repository. [SJEKK: Martin confirm]
 
@@ -428,10 +427,10 @@ Required by the rules (R7): everything external that we used, with licence and c
 
 | Library | Version | Licence | Use |
 |---|---|---|---|
-| kloppy | 3.19.1 | [SJEKK: BSD-3-Clause?] | Loading Sportec data in the external validation only. The competition pipeline does not use it |
-| numpy | [MARTIN FYLLER INN] | BSD-3-Clause [SJEKK] | The whole competition pipeline (`src/`): parsing, features, logistic regression, Viterbi. No scipy, scikit-learn or HMM library is used |
-| pandas | [MARTIN FYLLER INN] | BSD-3-Clause [SJEKK] | The organiser's scorer and the external validation; not needed to produce the submission |
-| pyarrow | [MARTIN FYLLER INN] | Apache-2.0 [SJEKK] | Parquet files in the external validation |
+| kloppy | 3.19.1 | BSD-3-Clause | Loading Sportec data in the external validation only. The competition pipeline does not use it |
+| numpy | 2.5.4 | BSD-3-Clause | The whole competition pipeline (`src/`): parsing, features, logistic regression, Viterbi. No scipy, scikit-learn or HMM library is used |
+| pandas | 3.1.1 | BSD-3-Clause | The organiser's scorer and the external validation; not needed to produce the submission |
+| pyarrow | 26.0.1 | Apache-2.0 | Parquet files in the external validation |
 | Organiser's code (`games.py`, `evaluation/`, `starter/`) | – | MIT | `games.py` for file paths and the assessed spans; `evaluation/` for scoring in the external validation and in tests; `starter/baseline.py` in one test as a comparison on synthetic data |
 
 **Development tools:** Claude Code (Anthropic) was used as a coding assistant on synthetic and open (Sportec) data only: it wrote most of the code in `src/` and ran the Sportec sweeps. No competition data were shared with it, and it never ran the pipeline on the competition match. The repository contains technical guards for this: deny rules in `.claude/settings.json`, a pre-tool hook (`.claude/hooks/guard_paths.py`) that blocks the assistant from reading the data folders, and a pre-commit check (`tools/check_no_data.py`) that stops data files from being committed. [SJEKK: keep or shorten after the organiser's answer on open question U5.]

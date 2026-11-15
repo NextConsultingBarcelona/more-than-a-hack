@@ -1,6 +1,6 @@
 # NEXT – Ball Possession Detection, More than a Hack 2027 (Phase 1)
 
-> **DRAFT (15 Nov 2026, Morten).** Before submission, remove this box and resolve every tag:
+> **DRAFT (15 Nov 2026, Morten; possession-model fields filled 15 Nov, Oskar).** Before submission, remove this box and resolve every tag:
 > - `[OSKAR FYLLER INN: …]` – possession model (Oskar)
 > - `[MARTIN FYLLER INN: …]` – dead-ball model, pipeline, reproduction (Martin)
 > - `[SJEKK: …]` – something Morten was unsure about; verify and then delete the tag
@@ -21,7 +21,7 @@
 
 ## Summary
 
-[OSKAR FYLLER INN: 4–6 sentences. What the system does (tracking → per-frame cues → HMM → Viterbi → H/A/D sequence), the one key idea (a switching penalty that prevents flickering, because spellF1 rewards whole possessions), and that all parameters were tuned on open Sportec matches only. No score on the competition match.]
+Our system turns the automatic tracking into one label per frame in four steps: per-frame cues from players and ball, evidence for "home vs away" and for "dead ball", a three-state hidden Markov model (`H`, `A`, `D`) decoded with Viterbi, and a clean-up that snaps each boundary to the event it stands for. The key idea is that a frame with nothing to say (ball in flight, ball missing) carries no evidence, so the model keeps the last team, and a switching cost means a single touch cannot change possession. This is the organiser's loose-ball rule expressed as a model, and it is what spellF1 rewards: whole possessions, not frames. Because the ball is missing on about 41 % of assessed frames, the model also learns, without any labels, how team shape and movement relate to possession on the frames where the ball *is* seen, and uses that where it is not. The four parameters that mattered were chosen on five open Sportec matches and checked on two held-out ones (spellF1 0.51 against 0.24 for the nearest-player baseline); nothing was tuned on the competition match and we report no score on it.
 
 ---
 
@@ -33,39 +33,78 @@ Each frame of the match must be labelled `H` (home in possession), `A` (away in 
 
 ### 1.2 Possession model (H/A): Hidden Markov Model + Viterbi
 
-[OSKAR FYLLER INN:
-- hidden states (`H`, `A`, `D`, and any sub-states, e.g. separate restart states)
-- emissions: which cues, and how they are combined into a likelihood per state
-- transitions: the H↔A switching penalty and why it is the key parameter
-- Viterbi decoding: per half? how frames outside the assessed periods are labelled
-- small state diagram (made from scratch or on synthetic data)
-- how the H/A model and Martin's dead-ball model are combined (one HMM, or D first and then H/A?)]
+**States.** Three hidden states, `H`, `A` and `D`, in **one** model. There are no sub-states and no "contested" state, because the ground truth has none.
+
+```
+            c_switch = 3.0
+        H <----------------> A
+         \                  /
+  c_die   \                /   c_die = 6.5      (live -> dead)
+  = 6.5    v              v
+            +---- D -----+     c_restart = 6.0  (dead -> live, to either team)
+```
+
+Costs are negative log-probabilities per frame; staying in a state is free.
+
+**Emissions.** Two per-frame log-likelihood ratios are computed (`src/possession.py`, `src/deadball.py`):
+
+- `team_llr` (home vs away) = ball proximity + touches + ball-free hint + Smart Tagging prior (section 1.4). State `H` scores `+team_llr/2`, state `A` scores `-team_llr/2`.
+- `dead_llr` (dead vs alive) from the dead-ball cues (section 1.3). State `D` scores `dead_llr`.
+
+A frame with no evidence scores 0 for all three states, so the decoder simply stays where it is.
+
+**Transitions.** The H↔A switching cost is the parameter that defines "controlled" possession: an opponent spell inside a possession must collect more evidence than two switches cost, which a deflection or a single touch cannot. After switching the ball-free hint on, it was the most influential setting in the external validation (section 5.6).
+
+**Decoding.** Viterbi is run separately on each assessed half, so nothing leaks across half-time. Frames outside the two halves are written as `X`; inside them the model never abstains (section 3).
+
+**After decoding** (same file, in this order):
+
+1. *Minimum durations.* A stoppage shorter than 2 s is treated as a tracking blip; a team spell shorter than 1 s between two spells of the other team is a touch, not a possession.
+2. *Boundary refinement.* A team→team boundary moves to the first frame the new team controls the ball after the old team's last control, so a pass in flight still belongs to the passer. A live→dead boundary moves to the first frame the ball is seen outside the pitch. A dead→live boundary moves back over a fast in-play ball or forward over a ball still lying on its spot.
+3. *Restart owner.* If the other team was clearly on the ball as play restarted, it owns the frames from the restart until the following team first controls the ball (section 3).
 
 ### 1.3 Dead-ball model (D) and transitions
 
-[MARTIN FYLLER INN:
-- which cues indicate dead ball (ball speed, ball outside the pitch, players slowing down / stopping, Smart Tagging?)
-- how the start and end frame of a dead-ball period are found (precise transitions)
-- how the owner of a restart (kick-off, throw-in, corner, goal kick, free kick) is decided
-- how the second-half kick-off is handled (assessed from the start of the half, but the ball is dead until kick-off)]
+`D` is a state of the same HMM, not a separate model run first. Its evidence `dead_llr` is a sum of:
+
+- **ball outside the pitch** by more than 0.75 m (strongest cue);
+- **kick-off formation**: both teams entirely in their own halves for about two seconds (restart after a goal);
+- **ball lying still** (detected, and staying within 0.35 m for about a second) counts for dead; a **fast ball inside the pitch** counts for alive;
+- **ball missing for more than 3 s** counts weakly for dead;
+- **Smart Tagging**: the 3 s before a tagged set piece, and the span between a tagged goal and the kick-off tag that follows it;
+- **player tempo**: a small logistic model on median player speed and the share of slow players. It is fitted at run time, without labels, on the frames the cues above are sure about (section 2.5). Its contribution is capped so that slow players alone need several seconds to create a stoppage.
+
+**Start and end frames.** Viterbi places the boundaries; refinement then snaps live→dead to the ball leaving the pitch and dead→live to the ball leaving its spot (section 1.2).
+
+**Restart owner.** The team whose player is on the still ball in the last 2 s of the stoppage, or the team named by a set-piece tag when that tag type has been measured to name the taker (section 1.4).
+
+**Second-half kick-off.** Assessed frames before the kick-off get an overwhelming dead-ball term (`w_prekick`), so they come out as `D`. The kick-off frame is not hard-coded: the Smart Tagging "Kick Off (Start)" tag gives a window, and inside it the kick is pinned by the formation breaking and, where the ball is seen, by the ball leaving the centre spot.
 
 ### 1.4 Cues ("hints") from tracking
 
-[OSKAR FYLLER INN + MARTIN FYLLER INN: one line per cue actually used in the final pipeline: what it is and why it indicates possession or dead ball. Candidates from our plan:
-- team share among the k players nearest the ball
-- distance from the ball to the nearest player of each team
-- ball speed and acceleration
-- ball outside the pitch boundaries
-- players slowing down / stopping (typical of dead ball)
-- behaviour when the ball is missing (about 41 % of assessed frames, according to the organiser's DATA.md): what the model relies on instead]
+Cues for **which team** (all in `src/features.py` and `src/possession.py`):
+
+| Cue | What it is | Why |
+|---|---|---|
+| Ball proximity | Difference between the distance from the ball to the nearest home and nearest away player, weighted by how close the nearer one is (possession zone of 2 m) and by the ball being slower than about 10 m/s | The player on the ball has it; a fast ball passing a player is not under his control (Vidal-Codina et al. 2022; Borghesi et al. 2023 on earlier rule-based systems) |
+| Touch | A change of ball velocity of at least 3 m/s next to a player | A kick or a reception is the moment possession is exercised (Link & Hoernig 2017) |
+| Ball-free hint | Logistic model on team centroids, their velocities and team spread, fitted per half at run time on frames where ball proximity is confident (section 2.5) | The ball is missing on ~41 % of assessed frames; player trajectories alone carry possession information (Kim et al. 2026) |
+| Smart Tagging phases | Weak prior from the `Team` tag of each phase | Free evidence, but automatic. Whether a code's tag names the team *with* or *without* the ball is measured against the ball evidence, not assumed; codes that agree with neither get weight 0 |
+
+Cues for **dead ball** are listed in section 1.3.
+
+**Ball handling.** Detections in short segments bounded by impossible jumps (> 45 m/s) are dropped; gaps of up to 1 s are linearly interpolated and count half; positions are smoothed over 5 frames before speeds are computed.
+
+**When the ball is missing.** Ball cues are silent, the hint and the Smart Tagging prior speak, and otherwise the decoder holds the last team. We did **not** use a "team share among the k nearest players" cue from our original plan; the nearest player of each team was enough.
 
 ### 1.5 Why this approach
 
-The HMM is interpretable, has few free parameters (so it can be tuned on a handful of external matches), is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. Alternatives considered:
+The HMM is interpretable, is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. It has many settings (section 5.5), but only a handful change the result, so they can be chosen on a few external matches. Alternatives considered:
 - **Nearest player + majority vote in a window** (the organiser's baseline). Simple, but changing the window size alone changes spellF1 by an order of magnitude while macroF1 barely moves – the problem is flickering, which a sequence model addresses directly.
 - **Temporal convolutional networks** (Borghesi et al., 2023). Strong per-frame results, but they need many labelled matches and are trained for per-frame accuracy, not whole spells. We have no labelled training data from the competition match and chose not to start with deep learning.
 
-[OSKAR FYLLER INN: confirm or adjust; add anything else that was tried.]
+- **Rule-based event detection** (Link & Hoernig 2017; Vidal-Codina et al. 2022). We took their cues (possession zone, kick detection) but not their hard per-frame decisions, which assume a ball on every frame.
+- **Neural sequence models with structured decoding** (Kim et al. 2026). Their result that constrained Viterbi decoding matters more than the backbone supports the HMM; their backbone needs labelled matches with reliable tracking, which we do not have for this data source.
 
 ---
 
@@ -75,11 +114,11 @@ The HMM is interpretable, has few free parameters (so it can be tuned on a handf
 
 | Source | Used? | How it was used |
 |---|---|---|
-| Tracking data (ATD, EPTS format) | Yes | Main input for all cues. [MARTIN FYLLER INN: loader (e.g. the organiser's `starter/load_atd.py` via kloppy), and how NaN, slots that appear/disappear and duplicate slots are handled] |
-| Smart Tagging | [MARTIN FYLLER INN: Yes / No] | [MARTIN FYLLER INN: e.g. extra cue for dead-ball phases. Note that it is automatic tagging, not ground truth, and that team tags are missing (`N/A`) on throw-ins] |
-| Homography | [SJEKK: probably No] | [SJEKK: not needed if all cues come from pitch coordinates in the tracking] |
-| Tactical video | [SJEKK: probably No] | [SJEKK: if not used as input, write "Not used as model input." Either way:] Our labels were **never compared with the video** (rule R8). Team members watched the video only to understand what counts as possession, which the organiser explicitly allows. |
-| Broadcast video | [SJEKK: probably No] | |
+| Tracking data (ATD, EPTS format), tactical | Yes | Main input for all cues. Read by our own parser (`src/io.py`, numpy only, no kloppy), indexed by video frame (`frame_id − 1`). Missing values stay NaN and every feature is NaN-aware. Track slots are never treated as persons: all cues are per team (nearest player, centroid, spread), so slots that appear, vanish or swap do not matter. Duplicate slots are not removed |
+| Smart Tagging | Yes | Four uses: (1) the kick-off tag anchors the search for each half's kick-off; (2) the seconds before a tagged set piece, and the span from a tagged goal to its kick-off, count for dead ball; (3) phase `Team` tags give a weak team prior with measured polarity (section 1.4); (4) a set-piece `Team` tag can name the restart owner. It is treated as automatic evidence, not ground truth; `N/A` team tags (all throw-ins) are ignored. Team names are matched to home/away by string similarity, since the tagging and the tracking metadata spell them differently |
+| Homography | No | Not needed: all cues come from pitch coordinates in the tracking |
+| Tactical video | No | Not used as model input. Our labels were **never compared with the video** (rule R8). Team members watched the video only to understand what counts as possession, which the organiser explicitly allows. [SJEKK: Oskar and Martin confirm] |
+| Broadcast video and its tracking | No | Not used: it is on its own timeline and we did not attempt the alignment |
 | Public ground truth (first 5 minutes) | Pipeline check only | Used only to confirm that the pipeline runs end-to-end and produces a valid file. **Not** used to select models or parameters (see sections 5.7 and 9). |
 
 ### 2.2 Data we deliberately did not use
@@ -95,10 +134,31 @@ The HMM is interpretable, has few free parameters (so it can be tuned on a handf
 |---|---|
 | **Sportec/IDSSE open tracking data** (Bundesliga 2022/23, CC-BY 4.0) | The *only* data used to tune or select parameters (section 5) |
 | **Synthetic match from our own generator** (`test_data_generator/`) | Software testing only: correct format, 199 319 rows, no crashes, sensible H/A/D behaviour. Built only from the organiser's public documentation (DATA.md, CHALLENGE.md) and general football knowledge; nothing in it is calibrated against the competition match. **Never** used for training, tuning or model selection |
+| **Synthetic match in the real file formats** (`tools/make_fake_match.py`) | Software testing of `src/` only: a toy match written as ATD text, metadata XML and Smart Tagging XML, with its own ground truth, so the whole pipeline is tested end to end. Built from the public documentation only. Not used for tuning; where it disagreed with the Sportec validation (section 2.4), Sportec decided |
 
 ### 2.4 Tried and dropped
 
-[OSKAR FYLLER INN + MARTIN FYLLER INN: short list of what was tried and why it was dropped. Every evaluation behind a decision must come from the external validation in section 5, not from the competition match.]
+Every decision below rests on the Sportec validation in section 5.
+
+- **Hand-set parameters without the ball-free hint.** The first version scored spellF1 0.35 on the tuning matches. Our synthetic match had suggested the hint was harmful, so it was off; Sportec showed it adds about 0.09, so it is on. This is why synthetic data are used for testing only.
+- **Richer hint features** (team speed difference, team extent, longer lags) – no gain (0.505 vs 0.503), dropped (`hint_rich = False`).
+- **Iterated self-training** (re-fitting the hint on the decoder's own output for one or two more rounds) – worse (0.49–0.50), dropped (`hint_rounds = 0`).
+- **A ball-free dead/alive hint re-fitted on the decoder's output** – worse (0.47–0.48), dropped (`dead_iter = False`).
+- **Re-tuning against "controlled possession" labels.** Sportec's ownership field changes on brief touches: 8.4 possessions per live minute against 4.2 in the organiser's published figures for the public five minutes (17 possessions, mean 14.2 s, DATA.md). We built a variant of the Sportec labels in which a team spell shorter than 3 s lying between two spells of the other team does not count (the organiser's "a few seconds" of control; `MIN_CONTROLLED_S` in `external_validation/config.py`), and re-ran a 64-combination grid over `c_switch`, `min_poss_s`, `min_edge_s` and `touch_bonus` (`external_validation/grids/next_hmm_controlled.json`). Under those labels the unchanged model scores 0.585 on the tuning matches and 0.585 on the held-out ones (window-125 baseline: 0.26). The best re-tuned setting gained 0.02 on the tuning matches, and on the held-out matches it improved one and worsened the other. That is inside the noise band, so the parameters were **not** changed. This was done after the first run on the competition data; because nothing was adopted, the submitted file is unaffected.
+- **Team share among the k nearest players** – never needed; not implemented.
+- **Homography, video and broadcast tracking** – not attempted.
+
+### 2.5 What is fitted at run time, and on what
+
+The pipeline fits three small things on the match it is labelling. None of them uses a human label, the ground truth or the video; all are deterministic.
+
+| What | Fitted on | Target |
+|---|---|---|
+| Ball-free team hint (logistic regression, per half) | Team-shape features of the tracking | The sign of the ball-proximity evidence on frames where it is confident (pseudo-labels from our own algorithm) |
+| Player-tempo dead-ball term (logistic regression) | Median player speed, share of slow players | Frames our dead-ball cues are sure about (ball outside the pitch, kick-off formation) vs frames with a fast ball inside the pitch |
+| Smart Tagging polarity (one number per code) | Tagged phases | Agreement between the phase's `Team` tag and the ball-proximity evidence |
+
+RULES.md explicitly allows this on the provided match ("Learning without human labels – unsupervised or self-supervised methods, or pseudo-labels produced by an algorithm, provided no person decided any of them"). The same fitting runs unchanged on each Sportec match in the validation. [SJEKK: Morten – this is fitting on the competition match's *tracking* (never on the ground truth or the video). Our internal rule R9 says "training and calibration only on external data"; confirm that this reading of RULES.md is acceptable given "everything not explicitly allowed is not allowed". Fallback if not: `use_hint=False`, `dead_selftrain=False`, `use_tags=False`, at a cost of about 0.10 spellF1 on Sportec (0.41 vs 0.51 on the held-out matches for the hint alone).]
 
 ---
 
@@ -106,14 +166,14 @@ The HMM is interpretable, has few free parameters (so it can be tuned on a handf
 
 | Organiser's rule | Our implementation |
 |---|---|
-| When the ball is in play, one team always has possession (no neutral state) | [OSKAR FYLLER INN: e.g. no neutral state in the HMM; `X` used only where …] |
-| **Loose balls** (50/50, ball rolling after a tackle): the last team in possession keeps it | [OSKAR FYLLER INN: e.g. high self-transition probability; switch only when cues for the other team persist for ≥ N frames] |
-| Possession changes only when a player of the other team has **control** | [OSKAR FYLLER INN: how "control" is approximated from tracking (distance, ball speed relative to the player, duration)] |
-| One touch without control, a deflected pass, or a won header without subsequent control is **not** a change | [OSKAR FYLLER INN] |
-| **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | [MARTIN FYLLER INN: how the owner of a restart is determined] |
-| Dead ball is always `D` | [MARTIN FYLLER INN: cues and thresholds for dead ball, and for its start and end] |
-| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | [MARTIN FYLLER INN: how half boundaries are handled. The frame numbers are the official boundaries from the organiser's public CHALLENGE.md and must be read from there or from the data, never hand-coded per frame (rule R2)] [SJEKK: frames before kick-off in the second half must come out as `D` – checklist B7] |
-| Use of `X` | [OSKAR FYLLER INN + MARTIN FYLLER INN: whether and where we output `X`. Note that on spellF1 an `X` is forward-filled with our previous answer in the same half: `X` inside a possession costs nothing on spellF1 (only on macroF1), but `X` across a team change is expensive] |
+| When the ball is in play, one team always has possession (no neutral state) | The HMM has exactly three states, `H`, `A`, `D`. There is no neutral or contested state, and inside the assessed halves the model never outputs `X` |
+| **Loose balls** (50/50, ball rolling after a tackle): the last team in possession keeps it | A frame without evidence scores 0 for every state and staying is free, so the decoder keeps the last team. This covers a ball in flight, a ball rolling away from everyone, and a ball the tracker has lost |
+| Possession changes only when a player of the other team has **control** | "Control" on a frame = ball within 2 m of a player, that team clearly nearer than the other, ball slower than about 10 m/s. A change needs enough such frames to outweigh the switching cost (3.0), and a spell shorter than 1 s between two spells of the other team is removed. The boundary is then placed on the first frame of that control, so the pass before it stays with the passer |
+| One touch without control, a deflected pass, or a won header without subsequent control is **not** a change | A touch adds evidence for about five frames; it cannot pay for switching away and back (2 × 3.0), so the surrounding team keeps the ball. A deflection that does not slow the ball contributes even less, because fast-ball frames are down-weighted |
+| **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | The decoder picks the team that the evidence after the restart favours. If the *other* team was on the still ball during the last 2 s of the stoppage (at least 10 control frames, four times more than the opponent), or a set-piece tag of a measured-reliable type names it, that team owns the frames from the restart until the following team first controls the ball. Throw-ins carry no team tag and often no ball, so there the owner is whoever the evidence favours |
+| Dead ball is always `D` | `D` is a state of the HMM with the cues of section 1.3. Stoppages shorter than 2 s are removed as tracking blips. Ownership of a dead ball is never output |
+| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. `tools/sanity_check.py` checks this on the submitted file (checklist B7). |
+| Use of `X` | `X` only outside the two assessed halves, where it is never scored. Inside them we never abstain: on spellF1 an `X` is forward-filled with our previous label, so it can never score better than writing that label ourselves, and it costs macroF1 |
 
 ---
 
@@ -128,14 +188,23 @@ The HMM is interpretable, has few free parameters (so it can be tuned on a handf
 
 ### 4.2 Model limitations
 
-[OSKAR FYLLER INN + MARTIN FYLLER INN: based on Sportec validation only, e.g.
-- long periods with the ball missing (duels, near goal)
-- short possessions (quick one-twos, interceptions) that the switching penalty may smooth away
-- exact first/last frame of dead-ball periods at restarts]
+Based on the Sportec validation only.
+
+- **Half of the possessions are still not matched.** On the held-out matches macroF1 is 0.87 but spellF1 is 0.51: most frames are right, yet many spells are split, merged or misplaced. We did not break this down by error type, so we cannot say how much is dead-ball timing, short spells or team errors.
+- **Parameters are on a plateau.** About 25 further settings were varied on the tuning matches and none improved spellF1 by more than the scorer's own noise band (0.04); a few made it clearly worse. More tuning of this model will not help; a better model would.
+- **Short possessions.** The switching cost and the 1 s minimum remove brief spells by design. That matches the organiser's "controlled possession", but a genuine quick interception followed by an immediate loss is lost too.
+- **Long ball gaps.** With no ball, a change of possession can only be seen through team movement, which lags by a second or two; the boundary is then late.
+- **Restarts without a visible ball** (most throw-ins): the owner is inferred from what happens afterwards, so a restart that is lost at once is given to the wrong team.
+- **Untested parts.** Sportec has no Smart Tagging, so everything that uses it (kick-off anchoring, set-piece cues, team prior) is tested on synthetic data only, and its weights are design choices, not tuned values.
+- **Tracking noise.** The validation data have no position noise and no duplicate slots; the possession radius and the touch threshold may be too tight for noisier tracking.
 
 ### 4.3 With more time
 
-[OSKAR FYLLER INN + MARTIN FYLLER INN: 3–5 concrete items, e.g. more open matches for tuning, learned emissions, explicit restart-type states, more realistic degradation (duplicate slots, position noise).]
+1. **An error breakdown on Sportec** (dead-ball timing vs short spells vs team errors) before changing anything else.
+2. **Learned emissions**: a classifier trained on labelled open matches instead of hand-built evidence, keeping the HMM on top (Borghesi et al. 2023 for the features, Kim et al. 2026 for the structured decoding).
+3. **More realistic degradation** in the validation (position noise, duplicate slots, false ball detections) so that radii and thresholds can be tuned.
+4. **Explicit restart states** per set-piece type, so that the restart owner is part of the decoding rather than a correction after it.
+5. **The broadcast tracking** as a second ball source for the frames where the tactical tracking has none.
 
 ---
 
@@ -149,13 +218,15 @@ Sportec/IDSSE open tracking data, Bundesliga 2022/23 (Bassek et al., 2025), lice
 
 | Match ID | Role |
 |---|---|
-| J03WPY | [OSKAR FYLLER INN: tuning / held-out test] |
-| J03WMX | [OSKAR FYLLER INN] |
-| J03WN1 | [OSKAR FYLLER INN] |
-| J03WOH | [OSKAR FYLLER INN] |
-| J03WOY | [OSKAR FYLLER INN] |
-| J03WQQ | [OSKAR FYLLER INN] |
-| J03WR9 | [OSKAR FYLLER INN] |
+| J03WPY | Tuning |
+| J03WMX | Tuning |
+| J03WN1 | Tuning |
+| J03WOH | Tuning |
+| J03WOY | Tuning |
+| J03WQQ | Held-out check |
+| J03WR9 | Held-out check |
+
+The split was fixed before any score was computed.
 
 ### 5.2 Ground truth on Sportec
 
@@ -188,31 +259,108 @@ None of these values were measured on, or adjusted to, the competition data.
 - **Tools:** `external_validation/sweep.py` runs a model over a grid of parameter values on every built Sportec match and produces one table with, per parameter combination: mean spellF1, its spread (standard deviation) across matches, minimum spellF1, mean macroF1, and spellF1 per match.
 - **Selection rule:** choose values that are good on *most* matches (high mean, low spread, acceptable minimum), not the value that wins on one match.
 - **Baseline:** `external_validation/example_baseline.py` implements the organiser's baseline idea (nearest slot to the ball + majority vote in a window) on the same degraded Sportec matches, for comparison.
-- **Protocol:** [OSKAR FYLLER INN: e.g. tune on 4 matches, report on 3 held-out matches, or leave-one-match-out.]
+- **Protocol:** all choices were made on the five tuning matches. The two held-out matches were scored once, after the values had been written into `src/config.py`, and nothing was changed afterwards. The model is called through `src/extval.py`, a thin adapter around the same code the competition pipeline runs; the only difference is that Sportec has no Smart Tagging, so that evidence is absent in validation.
+- **What was run:** about ten sweeps on the tuning matches (transition costs, evidence strengths, hint settings, dead-ball weights, durations, refinement windows, and the three extensions in section 2.4). The first two exploratory sweeps used a parallel driver that calls the same `predict` and the same scorer; everything reported here comes from `sweep.py`. The grid that documents the final choice is `external_validation/grids/next_hmm.json`.
 
 ### 5.5 Parameters and how each was set
 
 Every free parameter in the final pipeline must appear here with its source. Allowed sources: tuned on Sportec, taken from literature, or set from football knowledge (with justification). "Chosen from the score on the public 5 minutes" or "looked right on video" are **not** allowed sources.
 
-| Parameter | What it controls | Final value | Source | Search range / method |
+All values live in `src/config.py`; names below are the field names there. Three kinds of source:
+
+- **Tuned** – chosen on the five Sportec tuning matches.
+- **Prior, checked** – set from literature or football knowledge, then varied on Sportec; the prior was kept because no alternative was better by more than the noise band.
+- **Prior** – set from literature or football knowledge and not varied (either Sportec cannot test it, or it is a guard value).
+
+**Tuned on Sportec**
+
+| Parameter | What it controls | Final value | Search range |
+|---|---|---|---|
+| `c_switch` | H↔A switching cost: how much evidence a change of team needs | 3.0 | 0.25 – 7; 2 and 3 are equal within noise, 3 was taken as the less twitchy |
+| `use_hint` | Whether the ball-free team hint is used | on | on / off (+0.09 with it on) |
+| `touch_bonus` | Evidence per frame around a detected touch | 0.6 | 0 – 1.0 |
+| `dead_clip` | Cap on the player-tempo dead-ball term | 0.08 | 0.05 – 0.4 |
+
+**Prior, checked on Sportec**
+
+| Parameter | What it controls | Final value | Prior from | Range checked |
 |---|---|---|---|---|
-| H↔A switching penalty | How strong and persistent the evidence must be before possession changes team | [OSKAR FYLLER INN] | Tuned on Sportec | [OSKAR FYLLER INN] |
-| Live→dead / dead→live transition probabilities | How easily the model enters and leaves `D` | [OSKAR/MARTIN FYLLER INN] | Tuned on Sportec | [OSKAR/MARTIN FYLLER INN] |
-| Dead-ball ball-speed threshold | Ball speed below which a stopped ball suggests dead ball | [MARTIN FYLLER INN] | [MARTIN FYLLER INN] | [MARTIN FYLLER INN] |
-| Out-of-bounds margin | Distance outside the lines before "ball out" is assumed (tracking noise) | [MARTIN FYLLER INN] | [MARTIN FYLLER INN] | [MARTIN FYLLER INN] |
-| Number of nearest players (k) | Size of the neighbourhood for the team-share cue | [OSKAR FYLLER INN] | Literature (Borghesi et al. 2023) / tuned | [OSKAR FYLLER INN] |
-| Emission weights / temperature | Relative weight of each cue in the state likelihood | [OSKAR FYLLER INN] | Tuned on Sportec | [OSKAR FYLLER INN] |
-| Handling of missing ball | Weight of player-based cues when the ball is NaN | [OSKAR FYLLER INN] | | |
-| `X` policy (if used) | When the model outputs `X` instead of a label | [OSKAR FYLLER INN] | | |
-| [OSKAR/MARTIN FYLLER INN: any other parameter] | | | | |
+| `c_die`, `c_restart` | Cost of entering / leaving `D` | 6.5, 6.0 | Stoppages are rare events (one per ~30 s of play) | 2 – 10 |
+| `r_ctrl` | Radius of a player's possession zone | 2.0 m | Vidal-Codina et al. use 0.5–1 m on manual-grade tracking; widened for automatic tracking | 1.0 – 3.0 |
+| `v_ctrl` | Ball speed above which a ball is passing by, not controlled | 10 m/s | Slow-ball condition of earlier rule-based systems | 6 – 16 |
+| `beta`, `s_gap` | Strength and distance scale of the proximity evidence | 0.5, 1.0 m | Design | 0.25 – 2; 0.5 – 2 |
+| `touch_dv` | Velocity change that counts as a touch | 3 m/s | Kick detection, Link & Hoernig (4 m/s² on smoothed data) | 2 – 5 |
+| `ball_max_gap`, `interp_weight` | Longest ball gap that is interpolated, and its weight | 25 frames, 0.5 | Design | 0 – 125; 0.25 – 1 |
+| `hint_shrink`, `hint_clip`, `hint_on_ball` | Scale, cap and on-ball weight of the hint | 0.15, 0.3, 0.3 | Neighbouring frames are near-copies, so each counts for little | 0.15 – 0.6; 0.3 – 1.2; 0.3 – 1 |
+| `w_still`, `w_fast`, `w_missing`, `long_gap` | Dead-ball weights: still ball, fast ball in play, long ball gap and its length | 0.4, 0.3, 0.1, 75 frames | Design | 0 – 1; 0 – 1; 0 – 0.3; 25 – 150 |
+| `w_kickform` | Dead-ball weight of the kick-off formation | 1.0 | Laws of the game (Vidal-Codina's kick-off trigger) | on / off |
+| `dead_selftrain` | Player-tempo term fitted at run time instead of a fixed threshold | on | – | on / off |
+| `min_poss_s`, `min_edge_s`, `min_dead_s` | Minimum durations | 1.0, 0.4, 2.0 s | Organiser's "controlled possession"; a real stoppage lasts seconds | 0.3 – 2; 0.2 – 1; 1 – 4 |
+| `refine`, `refine_team_s`, `refine_dead_s` | Boundary refinement and its search windows | on, 2.0 s, 1.0 s | Design | on / off; 0.5 – 4; 0.5 – 2 |
+| `use_restart` | Restart-owner correction | on | Organiser's rule on restarts | on / off |
+| `hint_rich`, `hint_rounds`, `dead_iter` | The three dropped extensions (section 2.4) | off, 0, off | – | on / off; 0 – 2 |
+
+**Prior, not varied**
+
+| Parameter | What it controls | Final value | Source |
+|---|---|---|---|
+| `ball_vmax`, `ball_min_seg` | Ball-jump filter | 45 m/s, 5 detections | A football does not exceed ~35 m/s in play |
+| `s_ctrl`, `s_v`, `touch_r`, `touch_half` | Softness of the radius and speed limits; touch distance and width | 0.5 m, 2 m/s, 2.5 m, ±2 frames | Design |
+| `hint_conf`, `hint_stride`, `hint_min_frames` | Which frames become pseudo-labels for the hint | 0.3, every 5th, ≥ 400 per class | Design |
+| `oob_margin`, `w_oob` | Ball-out margin and weight | 0.75 m, 1.5 | Margin for tracking noise; strongest dead-ball cue |
+| `still_spread` | Spread below which a detected ball counts as lying still | 0.35 m | Design |
+| `dead_min_frames`, `dead_shrink` | Fitting of the player-tempo term | ≥ 300 per class, 0.25 | Design |
+| `v0_players`, `s_players`, `w_players` | Fallback player-speed threshold if the tempo term cannot be fitted | 1.6 m/s, 0.5, 0.1 | Football knowledge |
+| `use_tags`, `tag_gamma`, `tag_min_agree`, `tag_min_frames` | Smart Tagging team prior | on, 0.03, 0.2, 250 | Design; **cannot be tested on Sportec** (no Smart Tagging). `tag_gamma` is set so that a 10 s phase alone cannot create a possession |
+| `w_setpiece`, `setpiece_pre_s`, `w_goal`, `w_prekick` | Smart Tagging dead-ball cues and the forced `D` before kick-off | 0.3, 3 s, 0.5, 8.0 | Design; cannot be tested on Sportec |
+| `restart_look_s`, `restart_min_frames`, `restart_max_s` | Restart-owner correction | 2 s, 10 frames, 6 s | Design |
+
+**`X` policy:** not a parameter. `X` is written outside the assessed halves only.
+
+No value was chosen from the public 5-minute ground truth, from the video, or from any measurement on the competition match.
 
 ### 5.6 Results on Sportec
 
-[OSKAR FYLLER INN: table with spellF1 and macroF1 per held-out match and on average, for our model and the baseline (copy from the `sweep.py` output in `ext_data/results/`). Sportec results only. One or two sentences of interpretation, remembering that these numbers compare parameters and are not an estimate of the competition score.]
+Sportec results only, from `sweep.py`. "Baseline" is `example_baseline.py` with a window of 50 frames. "Ours" is the final configuration in `src/config.py`.
+
+**Held-out matches** (not used for any choice)
+
+| Match | Baseline spellF1 | Ours spellF1 | Baseline macroF1 | Ours macroF1 |
+|---|---|---|---|---|
+| J03WQQ | 0.240 | 0.506 | 0.364 | – |
+| J03WR9 | 0.236 | 0.522 | 0.359 | – |
+| **Mean** | **0.238** | **0.514** | **0.361** | **0.869** |
+
+(`sweep.py` reports macroF1 for our model as a mean over the matches only.)
+
+**Tuning matches**
+
+| Match | Baseline spellF1 | Ours spellF1 |
+|---|---|---|
+| J03WPY | 0.212 | 0.526 |
+| J03WMX | 0.227 | 0.448 |
+| J03WN1 | 0.224 | 0.491 |
+| J03WOH | 0.205 | 0.540 |
+| J03WOY | 0.217 | 0.501 |
+| **Mean** | **0.217** | **0.501** (spread 0.036, macroF1 0.862) |
+
+**What moved the score** (mean spellF1 on the tuning matches)
+
+| Change | spellF1 |
+|---|---|
+| Hand-set starting values, hint off, `c_switch` 6 | 0.350 |
+| + ball-free hint on | 0.438 |
+| + `c_switch` 3 | 0.480 |
+| + `touch_bonus` 0.6 | 0.494 |
+| + `dead_clip` 0.08 (final) | 0.501 |
+
+On the held-out matches, with the other final values in place: 0.383 (hint off, `c_switch` 6), 0.412 (hint off, `c_switch` 3), 0.487 (hint on, `c_switch` 6) and 0.514 (final).
+
+The held-out score is as good as the tuning score, so the choice did not overfit the five tuning matches. The baseline's low macroF1 is partly because it never outputs `D`. These numbers compare configurations with each other on Sportec's possession definition; they are **not** an estimate of our score on the competition match.
 
 ### 5.7 Freezing parameters
 
-[OSKAR FYLLER INN + MARTIN FYLLER INN: confirm that the final parameters were committed and tagged (`<tag>`, `<date>`) **before** the pipeline was run on the public 5 minutes, and that nothing was changed afterwards based on that run.]
+The final parameters were committed on 15 Nov 2026 in commit `06f0a52` (branch `possession-modell`, pull request 4). At that point the pipeline in `src/` had been run on synthetic and Sportec data only. [MARTIN FYLLER INN: tag name and date of the frozen parameters, and confirmation that the tag was made **before** the pipeline was first run on the competition data and the public 5 minutes, and that nothing was changed afterwards based on that run.] [SJEKK: Oskar – confirm that no earlier script of ours was scored on the public 5 minutes and then used to choose anything in `src/`.]
 
 ---
 
@@ -220,14 +368,14 @@ Every free parameter in the final pipeline must appear here with its source. All
 
 > Must be **identical** to the README (checklist G6).
 
-**Requirements:** Python [MARTIN FYLLER INN: x.y.z], Windows or macOS [SJEKK: tested on both – checklist C5]. Dependencies pinned in [MARTIN FYLLER INN: lock file]. [SJEKK: `requirements.txt` currently lists `numpy` and `pandas` without versions, and `requirements-dev.txt` uses `>=`. Every package, including indirect ones, must be pinned with `==` – checklist C1.]
+**Requirements:** Python 3.13 (tested with 3.13.5), Windows or macOS [SJEKK: tested on both – checklist C5; so far macOS only]. All dependencies, including indirect ones, are pinned with `==` in `requirements.txt`.
 
 ```bash
 git clone https://github.com/NextConsultingBarcelona/more-than-a-hack.git
 cd more-than-a-hack
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS: source .venv/bin/activate
-pip install -r requirements.txt   # [MARTIN FYLLER INN: or the lock-file command]
+python -m pip install -r requirements.txt
 ```
 
 **Data:** The match data are **not** included in the repository. Place the organiser's data in a folder of your choice, outside the repository, and set:
@@ -240,8 +388,10 @@ pip install -r requirements.txt   # [MARTIN FYLLER INN: or the lock-file command
 **Run (one command):**
 
 ```bash
-python [MARTIN FYLLER INN: run script].py   # writes NEXT.csv
+python -m src.pipeline --team-name NEXT --no-cache   # writes NEXT.csv into the organiser's results folder
 ```
+
+This is the same command as in the README, which also gives the two commands that check the file. The pipeline uses no random numbers, so the same input gives the same bytes; a test checks this on synthetic data (`tests/test_pipeline_fake.py`).
 
 [MARTIN FYLLER INN: expected runtime; that the output is deterministic (fixed seeds, no tuning at run time); SHA-256 of the expected output.]
 
@@ -251,8 +401,10 @@ python [MARTIN FYLLER INN: run script].py   # writes NEXT.csv
 python -m pip install -r external_validation/requirements-validation.txt
 python external_validation/build_dataset.py --selftest        # ~1 s, synthetic data, checks the setup
 python external_validation/build_dataset.py --matches all     # downloads the 7 Sportec matches via kloppy
-python external_validation/sweep.py <grid file>.json          # [OSKAR FYLLER INN: the grid file used for the final parameters]
+python external_validation/sweep.py external_validation/grids/next_hmm.json --matches J03WPY J03WMX J03WN1 J03WOH J03WOY
 ```
+
+The last command reproduces the grid behind the final choice on the five tuning matches (32 combinations, a few minutes). If the kloppy download times out (the tracking files are about 370 MB each), re-run it; the cache keeps finished files.
 
 The Sportec files are downloaded and cached by kloppy outside the repository; generated files are written to `ext_data/`, which is git-ignored. Loading one match needs a few GB of RAM.
 
@@ -267,29 +419,30 @@ Required by the rules (R7): everything external that we used, with licence and c
 | Dataset | Use | Licence | Credit |
 |---|---|---|---|
 | Sportec/IDSSE open tracking data, Bundesliga 2022/23 (match IDs J03WPY, J03WMX, J03WN1, J03WOH, J03WOY, J03WQQ, J03WR9) | Tuning and validation (section 5) | CC-BY 4.0 | Bassek, M., Rein, R., Weber, H. et al. (2025). *Scientific Data* 12, 195. doi:10.1038/s41597-025-04505-y |
-| Metrica Sports Sample Data (Sample Game 3) | [SJEKK: delete this row if it was not used. Our generator v1 is built from the organiser's documentation only] | No formal licence ("use responsibly, cite the source") | Metrica Sports, github.com/metrica-sports/sample-data |
 
-**Pre-trained models:** None. [OSKAR/MARTIN: confirm]
+**Pre-trained models:** None. The only models are the small logistic regressions fitted at run time (section 2.5); no weights are stored in the repository.
 
 **Software libraries**
 
 | Library | Version | Licence | Use |
 |---|---|---|---|
-| kloppy | 3.19.1 | [SJEKK: BSD-3-Clause?] | Loading Sportec data (and EPTS data, if used) |
-| numpy | [MARTIN FYLLER INN] | BSD-3-Clause [SJEKK] | |
-| pandas | [MARTIN FYLLER INN] | BSD-3-Clause [SJEKK] | |
-| pyarrow | [MARTIN FYLLER INN] | Apache-2.0 [SJEKK] | Parquet files in the external validation |
-| [OSKAR/MARTIN FYLLER INN: e.g. scipy, hmmlearn] | | | |
-| Organiser's starter and evaluation code (`starter/`, `evaluation/`) | – | MIT | Data loaders; scoring in the external validation |
+| kloppy | 3.19.1 | BSD-3-Clause | Loading Sportec data in the external validation only. The competition pipeline does not use it |
+| numpy | 2.5.4 | BSD-3-Clause | The whole competition pipeline (`src/`): parsing, features, logistic regression, Viterbi. No scipy, scikit-learn or HMM library is used |
+| pandas | 3.1.1 | BSD-3-Clause | The organiser's scorer and the external validation; not needed to produce the submission |
+| pyarrow | 26.0.1 | Apache-2.0 | Parquet files in the external validation |
+| Organiser's code (`games.py`, `evaluation/`, `starter/`) | – | MIT | `games.py` for file paths and the assessed spans; `evaluation/` for scoring in the external validation and in tests; `starter/baseline.py` in one test as a comparison on synthetic data |
 
-**Development tools:** Claude Code (Anthropic) was used as a coding assistant on synthetic and open (Sportec) data only. No competition data were shared with it. The repository contains technical guards for this: deny rules in `.claude/settings.json`, a pre-tool hook (`.claude/hooks/guard_paths.py`) that blocks the assistant from reading the data folders, and a pre-commit check (`tools/check_no_data.py`) that stops data files from being committed. [SJEKK: keep or shorten after the organiser's answer on open question U5.]
+**Development tools:** Claude Code (Anthropic) was used as a coding assistant on synthetic and open (Sportec) data only: it wrote most of the code in `src/` and ran the Sportec sweeps. No competition data were shared with it, and it never ran the pipeline on the competition match. The repository contains technical guards for this: deny rules in `.claude/settings.json`, a pre-tool hook (`.claude/hooks/guard_paths.py`) that blocks the assistant from reading the data folders, and a pre-commit check (`tools/check_no_data.py`) that stops data files from being committed. [SJEKK: keep or shorten after the organiser's answer on open question U5.]
 
 ---
 
 ## 8. References
 
 - Bassek, M., Rein, R., Weber, H. et al. (2025). An integrated dataset of spatiotemporal and event data in elite soccer. *Scientific Data* 12, 195. doi:10.1038/s41597-025-04505-y
-- Borghesi, M., et al. (2023). Using Temporal Convolutional Networks to Estimate Ball Possession in Soccer Games. *Expert Systems with Applications*. [SJEKK: volume/pages, or delete if not cited]
+- Borghesi, M., Costa, L. D., Morra, L., & Lamberti, F. (2023). Using Temporal Convolutional Networks to estimate ball possession in soccer games. *Expert Systems with Applications* 223, 119780. doi:10.1016/j.eswa.2023.119780
+- Kim, H., Lee, K., Seo, S., Ko, S.-K., Yoon, J., & Park, C. (2026). PathCRF: Ball-Free Soccer Event Detection via Possession Path Inference from Player Trajectories. *KDD '26*. doi:10.1145/3770855.3818152
+- Link, D., & Hoernig, M. (2017). Individual ball possession in soccer. *PLoS ONE* 12(7), e0179953. doi:10.1371/journal.pone.0179953
+- Vidal-Codina, F., Evans, N., El Fakir, B., & Billingham, J. (2022). Automatic event detection in football using tracking data. arXiv:2202.00804
 - More than a Hack 2027, official repository: https://github.com/metrica-sports/more-than-a-hack-2027
 - kloppy: https://github.com/PySport/kloppy
 
@@ -300,7 +453,7 @@ Required by the rules (R7): everything external that we used, with licence and c
 > Keep only statements that **all three members** have confirmed (checklist E1–E7). [SJEKK: Oskar and Martin confirm each line before submission.]
 
 - **Labels come from the algorithm (R2).** Labels are produced entirely by the code in the repository. No manual labelling, no manual correction of output and no frame-specific rules were used.
-- **External tuning only (R9).** All training, tuning and calibration were done on external open data (Sportec/IDSSE) only. No parameter was selected using the public ground truth or the video.
+- **External tuning only (R9).** Every parameter was set from literature, football knowledge or external open data (Sportec/IDSSE). No parameter was selected using the competition match, the public ground truth or the video. At run time the pipeline fits three small models on the match's own tracking using pseudo-labels from our own algorithm, with no human label, no ground truth and no video (section 2.5), which RULES.md allows as learning without human labels. [SJEKK: Morten – the earlier wording "all training and calibration on external data only" was not accurate for the run-time fitting; confirm this wording or switch the fitting off.]
 - **Public ground truth (R3).** The public 5-minute ground truth was used only to verify that the pipeline runs end-to-end. No full ground truth, and nothing derived from it, was used.
 - **No video comparison (R8).** Our labels were never compared with the video, neither manually nor by "checking whether it looks right".
 - **No human-made data about this match.** No event data, hand-labelled data or other human-annotated data about this match were used.

@@ -50,6 +50,6 @@ Nye svar legges inn i `docs/organizer_answers.md` (uten data). [SJEKK: hvem føl
 - **Sperre-hooken matcher stier som tekst.** Den stopper uhell, ikke bevisst omgåelse (f.eks. kodede stinavn).
 - **VS Code varsler «Property onFailure is not allowed»** i `.claude/settings.json` (varselet vises på linje 29, nøkkelen står på linje 31). Det er bare skjemaet til VS Code som ikke kjenner nøkkelen. Hooken virker likevel. Ikke endre filen.
 - **`tools/check_no_data.py` har sin egen liste** over sperrede mapper (`FORBIDDEN_DIRS = ("data/", "evaluation/gt/")`). Listen mangler `evaluation/results/` og `ext_data/`. Dette dekkes i dag bare av `.gitignore` (`ext_data/`, `*.parquet`, `evaluation/results/*.csv` unntatt `baseline_*`). Anbefaling: et menneske legger begge mappene til i listen. Filen er låst for Claude.
-- **`requirements.txt` er ikke låst** (`numpy`, `pandas` uten versjon). Det må fikses før C1.
+- **`requirements.txt` er låst** med `==` (15. nov, Python 3.13.5). C1 må fortsatt verifiseres fra ren klon på Windows.
 - **Arrangørens 5-minuttersfasit og baseline-svarene** (`evaluation/gt/`, `evaluation/results/baseline_*.csv`) ligger i repoet fra den første kopien av arrangørens repo. Det er arrangørens egne offentlige filer, så det er OK etter D5. Ikke commit nye filer der.
 

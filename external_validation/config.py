@@ -36,6 +36,17 @@ POST_FRAMES = 250       # 10 s
 N_SLOTS = 46
 SLOT_NAME = "s{:02d}"   # kolonner blir s00_x, s00_y, s00_s, ... Endre hvis generatoren bruker et annet navn.
 
+# --- Fasit -------------------------------------------------------------------
+# Sportec bytter ball-eier på korte berøringer (40-50 % av periodene er under 3 s). Arrangøren
+# regner bare KONTROLLERT ballbesittelse (CHALLENGE.md: en berøring uten kontroll, en avretting
+# eller en vunnet hodeduell er ikke et bytte; kontroll = "keeps the ball for a few seconds").
+# Med en verdi > 0 regnes en lagperiode kortere enn dette, rett mellom to perioder til det andre
+# laget, til det andre laget (build_dataset.controlled_owner).
+# 0 = Sportecs rå eierfelt. Det er dette parameterne i src/config.py er valgt på. 3.0 ble prøvd
+# 15. nov (grids/next_hmm_controlled.json): ny tuning ga +0.02 spellF1 på tuningkampene og
+# blandet resultat på de to holdt-utenfor-kampene, så parameterne ble ikke endret.
+MIN_CONTROLLED_S = 0.0
+
 # --- Gjør dataene dårligere -------------------------------------------------
 # Ballen
 BALL_MISSING_TARGET = 0.41        # andel av spilletiden uten ball (DATA.md: ca. 41 %)

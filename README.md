@@ -10,6 +10,59 @@ question to answer with it.
 
 ---
 
+## Team NEXT — reproducing our submission
+
+This repository is the organiser's starter repository plus our solution: a three-state (`H`/`A`/`D`)
+hidden Markov model over tracking-derived evidence, decoded with Viterbi. The code is in `src/`;
+the method is described in the technical document (`NEXT.md`, draft in [docs/NEXT.md](docs/NEXT.md)).
+
+**Requirements:** Python 3.13 (tested with 3.13.5). All dependencies are pinned to exact versions
+in `requirements.txt`. The match data is **not** in this repository.
+
+```bash
+git clone https://github.com/NextConsultingBarcelona/more-than-a-hack.git
+cd more-than-a-hack
+python -m venv .venv
+# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+Unpack the organiser's data bundle into a folder outside the repository and point `MTAH_DATA_DIR`
+at it:
+
+```bash
+# macOS/Linux: export MTAH_DATA_DIR=/path/to/data
+# Windows:     set MTAH_DATA_DIR=C:\path\to\data
+```
+
+**One command regenerates the submission file** (`evaluation/results/NEXT.csv`):
+
+```bash
+python -m src.pipeline --team-name NEXT --no-cache
+```
+
+The pipeline uses no random numbers and all parameters are fixed in `src/config.py`, so the same
+input gives the same bytes. To check the file:
+
+```bash
+python evaluation/validate_submission.py evaluation/results/NEXT.csv
+python tools/sanity_check.py evaluation/results/NEXT.csv
+```
+
+**Tests** (synthetic data only): `python -m pip install -r requirements-dev.txt`, then
+`python -m pytest -q`.
+
+**Tuning** was done only on open data from other matches: seven matches of the Sportec/IDSSE open
+tracking dataset (Bundesliga 2022/23, licence CC-BY 4.0; match IDs J03WPY, J03WMX, J03WN1, J03WOH,
+J03WOY, J03WQQ, J03WR9). Credit: Bassek, M., Rein, R., Weber, H. et al. (2025). An integrated
+dataset of spatiotemporal and event data in elite soccer. *Scientific Data* 12, 195.
+doi:10.1038/s41597-025-04505-y. The tuning code and how to re-run it are in
+[external_validation/](external_validation/README.md). No pre-trained models are used.
+
+Everything below this section is the organiser's original README.
+
+---
+
 ## The task
 
 **For every frame of the match, say who has the ball.**
@@ -150,6 +203,9 @@ machine, it scores the same way on ours.
 ---
 
 ## Requirements
+
+*(Organiser's original text. Our pinned `requirements.txt` needs Python 3.13 — see the Team NEXT
+section at the top.)*
 
 **Python 3.8 or newer.** The evaluation needs `numpy` and `pandas` and nothing else; it is tested
 under 3.8 and 3.11 and produces identical output under both. `starter/baseline.py` needs nothing

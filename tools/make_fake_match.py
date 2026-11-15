@@ -4,7 +4,7 @@ For tests and for anyone (including an LLM assistant) who must not look at the r
 output has the same layout as the gated bundle -- tactical ATD txt + metadata xml + Smart Tagging
 xml -- so the whole pipeline runs on it unchanged.
 
-    python tools/make_fake_match.py --out /tmp/fake --seed 0
+    python tools/make_fake_match.py --out test_data/fake_match --seed 0
 
 It is a toy, not a football simulator: 22 players on formation anchors, a ball that is carried,
 passed, intercepted, tackled away and kicked out, restarts after stoppages, and the defects the

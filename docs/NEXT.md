@@ -369,14 +369,14 @@ The final parameters were committed on 15 Nov 2026 in commit `06f0a52` (branch `
 
 > Must be **identical** to the README (checklist G6).
 
-**Requirements:** Python [MARTIN FYLLER INN: x.y.z], Windows or macOS [SJEKK: tested on both – checklist C5]. Dependencies pinned in [MARTIN FYLLER INN: lock file]. [SJEKK: `requirements.txt` currently lists `numpy` and `pandas` without versions, and `requirements-dev.txt` uses `>=`. Every package, including indirect ones, must be pinned with `==` – checklist C1.]
+**Requirements:** Python 3.13 (tested with 3.13.5), Windows or macOS [SJEKK: tested on both – checklist C5; so far macOS only]. All dependencies, including indirect ones, are pinned with `==` in `requirements.txt`.
 
 ```bash
 git clone https://github.com/NextConsultingBarcelona/more-than-a-hack.git
 cd more-than-a-hack
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS: source .venv/bin/activate
-pip install -r requirements.txt   # [MARTIN FYLLER INN: or the lock-file command]
+python -m pip install -r requirements.txt
 ```
 
 **Data:** The match data are **not** included in the repository. Place the organiser's data in a folder of your choice, outside the repository, and set:

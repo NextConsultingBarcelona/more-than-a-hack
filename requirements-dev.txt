@@ -1,6 +1,10 @@
 # Kun for utvikling og testing (ikke en del av innleverings-pipelinen).
-# Testet med: Python 3.13, numpy 2.5, pandas 3.0, pytest 9.1.
-# Philip låser eksakte versjoner når lagets Python-versjon er bestemt.
-numpy>=1.26
-pandas>=2.1
-pytest>=8.0
+# Eksakte versjoner, testet med Python 3.13.5.
+-r requirements.txt
+
+pytest==9.2.0
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.7.0
+Pygments==2.21.0
+colorama==0.4.6; sys_platform == "win32"

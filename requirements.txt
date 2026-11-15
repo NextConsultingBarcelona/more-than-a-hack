@@ -1,10 +1,13 @@
-# Everything the evaluation needs. Deliberately two lines.
+# Everything needed to produce and score the submission. Exact pins (rule: identical CSV from a
+# clean clone). Tested with Python 3.13.5 on macOS.
 #
-# The scorer is dependency-light on purpose: no sklearn, no torch, nothing that pins a Python
-# version. It runs under 3.8 and 3.11 alike and produces identical output, so "it scored
-# differently on my machine" is not a conversation anyone has to have.
+# The pipeline in src/ needs numpy only. pandas (and its two dependencies) is needed by the
+# organiser's scorer and validator in evaluation/.
 #
 # Optional tooling -- the ATD loader and anything that opens the video -- lives in
-# requirements-starter.txt.
-numpy
-pandas
+# requirements-starter.txt. Tests: requirements-dev.txt. Sportec tuning:
+# external_validation/requirements-validation.txt.
+numpy==2.5.4
+pandas==3.1.1
+python-dateutil==4.0.0
+tzdata==2026.6

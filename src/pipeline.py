@@ -1,7 +1,7 @@
 """Tracking -> features -> dead-ball evidence -> possession model -> submission CSV.
 
-    python -m src.pipeline --team-name next          # real data: run by a human, never by Claude
-    python -m src.pipeline --data-dir /tmp/fake --meta /tmp/fake/fake_meta.json --out /tmp/fake/pred.csv
+    python -m src.pipeline --team-name NEXT --no-cache   # real data: run by a human, never by Claude
+    python -m src.pipeline --data-dir test_data/fake_match --meta test_data/fake_match/fake_meta.json --out test_data/fake_match/pred.csv
 
 Deterministic: no random numbers anywhere, so the same data always gives the same bytes.
 Prints label counts and possession counts of its own output only -- never the tracking.
@@ -59,7 +59,7 @@ def summary(labels, fps=25):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--team-name", default="next")
+    parser.add_argument("--team-name", default="NEXT")
     parser.add_argument("--out", help="default: evaluation/results/<team-name>.csv")
     parser.add_argument("--data-dir", help="default: games.DATA_DIR ($MTAH_DATA_DIR or ./data)")
     parser.add_argument("--meta", help="json with n_frames and blocks (fake matches only)")

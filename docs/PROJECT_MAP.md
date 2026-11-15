@@ -26,6 +26,7 @@ tools/                    sjekk- og oppsettskript for sperrene
 test_data_generator/      lager falske data
 external_validation/      tuning på åpne Sportec-kamper (eneste lovlige tuning, R9)
 src/                      possession-pipelinen (se Moduler)
+experiments/              løse eksperimenter, ikke del av pipelinen
 tests/                    pytest, kun falske data
 test_data/                falske data, ikke i git
 starter/ evaluation/      kopi av arrangørens repo
@@ -43,6 +44,8 @@ Legg til nye mapper og moduler her når de opprettes.
 | `src/config.py` | Alle parametere samlet. Fire er valgt på 5 Sportec-kamper (grid: `external_validation/grids/next_hmm.json`), 2 kamper holdt utenfor | Oskar | Tunet 15. nov |
 | `src/pipeline.py` | Limer alt sammen og skriver innleverings-CSV-en | Oskar | Ikke kjørt på ekte data |
 | `src/extval.py` | Adapter `predict(tracking, slots, **params)` for `external_validation/sweep.py` | Oskar | Testet på falske data |
+| `tools/sanity_check.py` | Logisk sjekk av innleverings-CSV-en (format, X bare utenfor omgangene, D før avspark i 2. omgang), skriver bare OK/FEIL og SHA-256 | Oskar | Testet på falske data |
+| `experiments/hint_v0_direction.py` | Grovt eksperiment (spillerretning + stillstand, uten ball). Ikke del av pipelinen | Oskar | Ikke testet |
 | `tools/make_fake_match.py` | Syntetisk kamp i de ekte filformatene (ATD + Smart Tagging) med fasit, for testene av `src/` | Oskar | I bruk i testene |
 
 ## Kommandoer
@@ -53,6 +56,12 @@ Legg til nye mapper og moduler her når de opprettes.
 | Sjekk at ingen datafiler er sporet i git | `python tools/check_no_data.py --all` |
 | Kjør testene (falske data) | `python -m pytest -q` |
 | Tun possession-modellen på Sportec | `python external_validation/sweep.py external_validation/grids/next_hmm.json` |
-| Lag innleveringen (ekte data, kun mennesker, uten Claude) | `python -m src.pipeline --team-name next --no-cache` |
+| Lag innleveringen (ekte data, kun mennesker, uten Claude) | `python -m src.pipeline --team-name NEXT --no-cache` |
+| Sjekk innleverings-CSV-en (skriver bare OK/FEIL + SHA-256) | `python tools/sanity_check.py evaluation/results/NEXT.csv` |
+| Falsk kamp i ekte filformat, for feilsøking | `python tools/make_fake_match.py --out test_data/fake_match --seed 0` |
+
+Avhengigheter er låst med `==` i `requirements.txt` (pipeline + scorer), `requirements-dev.txt`
+(tester) og `external_validation/requirements-validation.txt` (Sportec), testet med Python 3.13.5.
+`Makefile` er bare snarveier (`make test`, `make fake`, `make submit`) til kommandoene over.
 
 På Mac kan kommandoen være `python3`. [AVKLARES: Python-versjon og kommando]

@@ -124,7 +124,7 @@ The HMM is interpretable, has few free parameters (so it can be tuned on a handf
 - **Domain gap.** Sportec data are corrected tracking with the ball almost always present. Our degradation (section 5.3) imitates the competition data only in broad terms: the ball-missing share and gap behaviour are taken from public documentation and general football knowledge, not measured on the competition match.
 - **Simplified degradation (v1).** No duplicate slots, no noise on positions, and a 20-second half-time break instead of a real one (it only separates the halves). The model may therefore meet noisier data in the competition match than in validation.
 - **Different possession definitions.** Sportec's per-frame possession field follows the DFL definition, which differs from the organiser's (e.g. for loose balls). Sportec scores therefore compare parameter values with each other; they are **not** an estimate of the competition score.
-- **Ball-owner mapping in the Sportec ground truth.** When the ball is alive but Sportec has no ball-owning team for a frame, our label builder currently maps the frame to `A`. [SJEKK: check how often this happens on the Sportec matches (allowed – open data) and whether those frames should instead keep the previous owner, which is closer to the organiser's loose-ball rule.]
+- **Ball-owner gaps in the Sportec ground truth.** When the ball is alive but Sportec has no ball-owning team for a frame, the label builder keeps the team that last had the ball in the same half (at the very start of a half: the next known owner), following the organiser's loose-ball rule (`fill_owner` in `external_validation/build_dataset.py`, tested in `tests/test_ground_truth.py`). On match J03WPY this never occurs (0 of 81,460 alive frames); the other six matches have not been checked.
 
 ### 4.2 Model limitations
 
@@ -162,7 +162,7 @@ Sportec/IDSSE open tracking data, Bundesliga 2022/23 (Bassek et al., 2025), lice
 Labels are derived mechanically from two per-frame fields in the Sportec tracking, in the same spirit as the organiser's ground truth (which is derived from corrected tracking, not from video or events):
 
 - ball state *dead* → `D`
-- ball state *alive* → the ball-owning team: home team → `H`, away team → `A`
+- ball state *alive* → the ball-owning team: home team → `H`, away team → `A`. A frame with no ball-owning team keeps the previous owner in the same half (the next known owner at the very start of a half), following the organiser's loose-ball rule
 
 The two halves are placed on one timeline with `X` frames before the match, between the halves and after the match, so that the file has the same structure as the competition file and the organiser's scorer treats each half separately. All tracking values are NaN on these `X` frames. Differences from the organiser's definition are described in section 4.1.
 

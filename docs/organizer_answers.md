@@ -28,7 +28,25 @@
 
 ---
 
-## 2. Ubesvarte spørsmål
+## 2. Svar på lagets e-post (sendt 12. november, besvart 15. november 2026)
+
+Vi spurte om lagendringen (5 → 3 personer: Philip og Kristian har trukket seg) og om gråsonene G1–G5.
+
+| Tema | Svar fra arrangøren |
+|---|---|
+| Gråsonene G1–G5 | Ingen nye avklaringer |
+| Lagendring (5 → 3) | Bekreftes hvis laget går videre |
+| Generelt prinsipp | «Alt som ikke er eksplisitt tillatt, er ikke tillatt» |
+
+### Slik følger laget dette opp
+
+- G1–G5 behandles som ubesvart, og de trygge valgene i tabellen under gjelder fortsatt.
+- I tvilstilfeller er svaret **nei**, til arrangøren eksplisitt har sagt ja. Det gjelder også punktene U1–U7 i `docs/SUBMISSION_CHECKLIST.md`.
+- Sjekklistepunkt A2 (lagendringen bekreftet) er ikke helt lukket. Bekreftelsen kommer først hvis vi går videre.
+
+---
+
+## 3. Ubesvarte spørsmål
 
 | # | Spørsmål | Til vi har svar |
 |---|---|---|

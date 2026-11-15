@@ -60,6 +60,7 @@ Legg til nye mapper og moduler her når de opprettes.
 | Tidligere tuning av håndvektet modell (`learned=False`) | `python external_validation/sweep.py external_validation/grids/next_hmm.json` |
 | Forsøk: tuning mot «kontrollert ballbesittelse» (ikke tatt i bruk) | sett `MIN_CONTROLLED_S = 3.0` i `external_validation/config.py`, bygg på nytt, kjør `sweep.py` med `grids/next_hmm_controlled.json` |
 | Lag innleveringen (ekte data, kun mennesker, uten Claude) | `python -m src.pipeline --team-name NEXT --no-cache` |
+| Samme, med den tidligere håndvektede modellen (reserve) | `python -m src.pipeline --team-name NEXT --no-cache --hand-weighted` |
 | Sjekk innleverings-CSV-en (skriver bare OK/FEIL + SHA-256) | `python tools/sanity_check.py evaluation/results/NEXT.csv` |
 | Falsk kamp i ekte filformat, for feilsøking | `python tools/make_fake_match.py --out test_data/fake_match --seed 0` |
 

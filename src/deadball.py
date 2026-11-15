@@ -57,9 +57,29 @@ def kickoff_frame(feats, tags, first, last, cfg):
     after = np.flatnonzero((run >= 5) & (np.arange(len(form)) > start))
     stop = int(after[0]) if len(after) else len(form)
     centre = np.flatnonzero(feats.ball_center[lo + start:lo + stop])
-    if len(centre):
-        return lo + start + int(centre[-1]) + 1
-    return lo + stop
+    if not cfg.kick_late:
+        # earlier behaviour: right after the last frame the ball was seen on the spot
+        if len(centre):
+            return lo + start + int(centre[-1]) + 1
+        return lo + stop
+
+    # The kick lies between the last frame the ball was seen on the spot (k_lo) and the frame the
+    # formation broke (k_hi). The taker often hides the ball for a few seconds before the kick,
+    # so k_lo can be seconds early; the decoder must not go live before the kick, so take the
+    # latest frame the evidence allows.
+    k_lo = lo + start + (int(centre[-1]) + 1 if len(centre) else 0)
+    k_hi = lo + stop
+    # ball still seen on the spot after the formation "broke": tracking noise, the kick is later
+    limit = min(hi, k_hi + cfg.frames(5))
+    elsewhere = feats.ball_ok[k_hi:limit] & ~feats.ball_center[k_hi:limit]
+    end = int(np.argmax(elsewhere)) if elsewhere.any() else limit - k_hi
+    still = np.flatnonzero(feats.ball_center[k_hi:k_hi + end])
+    if len(still):
+        k_lo = k_hi + int(still[-1]) + 1
+        k_hi = k_hi + end if elsewhere.any() else k_lo
+    # ball seen away from the spot before the formation broke: the kick has been taken by then
+    away = np.flatnonzero(feats.ball_ok[k_lo:k_hi] & ~feats.ball_center[k_lo:k_hi])
+    return k_lo + int(away[0]) if len(away) else k_hi
 
 
 def compute(feats, tags, blocks, cfg=None):

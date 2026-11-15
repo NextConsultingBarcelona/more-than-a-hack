@@ -64,6 +64,8 @@ def main(argv=None):
     parser.add_argument("--data-dir", help="default: games.DATA_DIR ($MTAH_DATA_DIR or ./data)")
     parser.add_argument("--meta", help="json with n_frames and blocks (fake matches only)")
     parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--hand-weighted", action="store_true",
+                        help="the earlier model: hand-weighted evidence instead of the learned one")
     args = parser.parse_args(argv)
 
     blocks = n_frames = None
@@ -71,7 +73,8 @@ def main(argv=None):
         with open(args.meta) as handle:
             meta = json.load(handle)
         n_frames, blocks = meta["n_frames"], [tuple(b) for b in meta["blocks"]]
-    labels, _ = label_match(args.data_dir, blocks, n_frames, use_cache=not args.no_cache)
+    cfg = Config().hand_weighted() if args.hand_weighted else Config()
+    labels, _ = label_match(args.data_dir, blocks, n_frames, cfg=cfg, use_cache=not args.no_cache)
     out = args.out or os.path.join(ROOT, "evaluation", "results", "{}.csv".format(args.team_name))
     mio.write_submission(out, labels)
     print("wrote {}".format(out))

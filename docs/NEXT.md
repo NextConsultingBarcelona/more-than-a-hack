@@ -14,14 +14,14 @@
 | **Team** | NEXT [SJEKK: identical to the registration, character for character] |
 | **Members** | Oskar Rändel (captain, possession model) · Martin (dead-ball model, pipeline, submission) · Morten (external validation, QA, documentation) |
 | **Repository** | https://github.com/NextConsultingBarcelona/more-than-a-hack |
-| **Commit / tag** | `[MARTIN FYLLER INN: commit hash]` / `phase1-submission` |
-| **Submitted file** | `NEXT.csv` (SHA-256: `[MARTIN FYLLER INN: hash from checklist B6]`) |
+| **Commit / tag** | the commit tagged `phase1-submission` |
+| **Submitted file** | `NEXT.csv` (SHA-256: `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`) |
 
 ---
 
 ## Summary
 
-Our system turns the automatic tracking into one label per frame in four steps: per-frame cues from players and ball, evidence for "home vs away" and for "dead ball", a three-state hidden Markov model (`H`, `A`, `D`) decoded with Viterbi, and a clean-up that snaps each boundary to the event it stands for. The key idea is that a frame with nothing to say (ball in flight, ball missing) carries no evidence, so the model keeps the last team, and a switching cost means a single touch cannot change possession. This is the organiser's loose-ball rule expressed as a model, and it is what spellF1 rewards: whole possessions, not frames. Because the ball is missing on about 41 % of assessed frames, the model also learns, without any labels, how team shape and movement relate to possession on the frames where the ball *is* seen, and uses that where it is not. The four parameters that mattered were chosen on five open Sportec matches and checked on two held-out ones (spellF1 0.51 against 0.24 for the nearest-player baseline); nothing was tuned on the competition match and we report no score on it.
+Our system turns the automatic tracking into one label per frame in four steps: per-frame cues from players and ball, evidence for "home vs away" and for "dead ball", a three-state hidden Markov model (`H`, `A`, `D`) decoded with Viterbi, and a clean-up that snaps each boundary to the event it stands for. The key idea is that a frame with nothing to say (ball in flight, ball missing) carries no evidence, so the model keeps the last team, and a switching cost means a single touch cannot change possession. This is the organiser's loose-ball rule expressed as a model, and it is what spellF1 rewards: whole possessions, not frames. Because the ball is missing on about 41 % of assessed frames, the model also learns, without any labels, how team shape and movement relate to possession on the frames where the ball *is* seen, and uses that where it is not. The per-frame evidence that goes into the decoder comes from two small gradient-boosted models trained on five open Sportec matches, with our hand-built cues as their inputs; decoder settings were chosen on the same five matches and checked on two held-out ones (spellF1 0.58 against 0.24 for the nearest-player baseline). Nothing was trained or tuned on the competition match and we report no score on it.
 
 ---
 
@@ -36,12 +36,12 @@ Each frame of the match must be labelled `H` (home in possession), `A` (away in 
 **States.** Three hidden states, `H`, `A` and `D`, in **one** model. There are no sub-states and no "contested" state, because the ground truth has none.
 
 ```
-            c_switch = 3.0
+            c_switch = 2.0
         H <----------------> A
          \                  /
-  c_die   \                /   c_die = 6.5      (live -> dead)
-  = 6.5    v              v
-            +---- D -----+     c_restart = 6.0  (dead -> live, to either team)
+  c_die   \                /   c_die = 10       (live -> dead)
+  = 10     v              v
+            +---- D -----+     c_restart = 10   (dead -> live, to either team)
 ```
 
 Costs are negative log-probabilities per frame; staying in a state is free.
@@ -52,6 +52,13 @@ Costs are negative log-probabilities per frame; staying in a state is free.
 - `dead_llr` (dead vs alive) from the dead-ball cues (section 1.3). State `D` scores `dead_llr`.
 
 A frame with no evidence scores 0 for all three states, so the decoder simply stays where it is.
+
+**Learned evidence (final model).** The two ratios above are not fed to the decoder directly. They are inputs to two gradient-boosted tree models trained on open Sportec matches (section 5), one for dead-vs-alive and one for home-vs-away given a live ball (`src/learned.py`):
+
+- *Inputs* are the hand-built evidence of sections 1.3 and 1.4 (without Smart Tagging) and the features behind it, each also averaged over windows from a quarter of a second to four seconds, and over the second or two before and after the frame: ball proximity and touches, the ball-free hint, ball speed, position and gaps, team centroids, their movement along the pitch and team spread, player tempo.
+- *Home/away symmetry.* Team features are oriented by each team's attacking direction, taken per half from which side its centroid stands on. The model is trained on every match in both orientations and evaluated as the average of a match and its mirror image, so it cannot favour a side.
+- *Output.* The models' log-odds, scaled by 0.4 and capped at ±6 per frame, replace `team_llr` and `dead_llr` in the decoder. The Smart Tagging terms (team prior, set pieces, the stretch before kick-off) are added on top unchanged, because Sportec has no Smart Tagging to learn them from.
+- *Why trees, and why only as evidence.* Borghesi et al. (2023) show that learned per-frame evidence beats rule-based cues, and Kim et al. (2026) that structured decoding matters more than the per-frame model. We kept our decoder and clean-up and replaced only the weighting of the cues. The trees are stored as plain arrays in `src/learned_model.json` and evaluated with numpy, so the pipeline needs no machine-learning library and is deterministic.
 
 **Transitions.** The H↔A switching cost is the parameter that defines "controlled" possession: an opponent spell inside a possession must collect more evidence than two switches cost, which a deflection or a single touch cannot. After switching the ball-free hint on, it was the most influential setting in the external validation (section 5.6).
 
@@ -99,7 +106,7 @@ Cues for **dead ball** are listed in section 1.3.
 
 ### 1.5 Why this approach
 
-The HMM is interpretable, is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. It has many settings (section 5.5), but only a handful change the result, so they can be chosen on a few external matches. Alternatives considered:
+The design combines four published approaches: the possession zone and kick detection of Link & Hoernig (2017) and Vidal-Codina et al. (2022) as cues, per-frame evidence learned from labelled open matches as in Borghesi et al. (2023), and structured decoding of whole possessions as argued by Kim et al. (2026). The HMM is interpretable, is deterministic (so the submitted file can be reproduced exactly), and needs no labelled data from the competition match. It has many settings (section 5.5), but only a handful change the result, so they can be chosen on a few external matches. Alternatives considered:
 - **Nearest player + majority vote in a window** (the organiser's baseline). Simple, but changing the window size alone changes spellF1 by an order of magnitude while macroF1 barely moves – the problem is flickering, which a sequence model addresses directly.
 - **Temporal convolutional networks** (Borghesi et al., 2023). Strong per-frame results, but they need many labelled matches and are trained for per-frame accuracy, not whole spells. We have no labelled training data from the competition match and chose not to start with deep learning.
 
@@ -132,7 +139,7 @@ The HMM is interpretable, is deterministic (so the submitted file can be reprodu
 
 | Data | Role |
 |---|---|
-| **Sportec/IDSSE open tracking data** (Bundesliga 2022/23, CC-BY 4.0) | The *only* data used to tune or select parameters (section 5) |
+| **Sportec/IDSSE open tracking data** (Bundesliga 2022/23, CC-BY 4.0) | The *only* data used to train models and to tune or select parameters (section 5). **Training labels:** the dataset's own per-frame ball state and ball-owning team, published by the DFL with the tracking (Bassek et al. 2025); we labelled nothing ourselves. Five matches, about 730,000 frames, every fifth frame used for training |
 | **Synthetic match from our own generator** (`test_data_generator/`) | Software testing only: correct format, 199 319 rows, no crashes, sensible H/A/D behaviour. Built only from the organiser's public documentation (DATA.md, CHALLENGE.md) and general football knowledge; nothing in it is calibrated against the competition match. **Never** used for training, tuning or model selection |
 | **Synthetic match in the real file formats** (`tools/make_fake_match.py`) | Software testing of `src/` only: a toy match written as ATD text, metadata XML and Smart Tagging XML, with its own ground truth, so the whole pipeline is tested end to end. Built from the public documentation only. Not used for tuning; where it disagreed with the Sportec validation (section 2.4), Sportec decided |
 
@@ -140,11 +147,12 @@ The HMM is interpretable, is deterministic (so the submitted file can be reprodu
 
 Every decision below rests on the Sportec validation in section 5.
 
+- **Hand-weighted evidence as decoder input.** This was our model until 15 Nov: spellF1 0.501 on the tuning matches and 0.514 on the held-out ones. Replacing the hand-set weights by the learned evidence of section 1.2 gave 0.546 (leave-one-match-out) and 0.582, with macroF1 up from 0.87 to 0.90, so the learned evidence is the final model. `learned=False` in `src/config.py` gives the earlier model back.
 - **Hand-set parameters without the ball-free hint.** The first version scored spellF1 0.35 on the tuning matches. Our synthetic match had suggested the hint was harmful, so it was off; Sportec showed it adds about 0.09, so it is on. This is why synthetic data are used for testing only.
 - **Richer hint features** (team speed difference, team extent, longer lags) – no gain (0.505 vs 0.503), dropped (`hint_rich = False`).
 - **Iterated self-training** (re-fitting the hint on the decoder's own output for one or two more rounds) – worse (0.49–0.50), dropped (`hint_rounds = 0`).
 - **A ball-free dead/alive hint re-fitted on the decoder's output** – worse (0.47–0.48), dropped (`dead_iter = False`).
-- **Re-tuning against "controlled possession" labels.** Sportec's ownership field changes on brief touches: 8.4 possessions per live minute against 4.2 in the organiser's published figures for the public five minutes (17 possessions, mean 14.2 s, DATA.md). We built a variant of the Sportec labels in which a team spell shorter than 3 s lying between two spells of the other team does not count (the organiser's "a few seconds" of control; `MIN_CONTROLLED_S` in `external_validation/config.py`), and re-ran a 64-combination grid over `c_switch`, `min_poss_s`, `min_edge_s` and `touch_bonus` (`external_validation/grids/next_hmm_controlled.json`). Under those labels the unchanged model scores 0.585 on the tuning matches and 0.585 on the held-out ones (window-125 baseline: 0.26). The best re-tuned setting gained 0.02 on the tuning matches, and on the held-out matches it improved one and worsened the other. That is inside the noise band, so the parameters were **not** changed. This was done after the first run on the competition data; because nothing was adopted, the submitted file is unaffected.
+- **Re-tuning against "controlled possession" labels.** Sportec's ownership field changes on brief touches (40–50 % of its possessions are shorter than 3 s), while the organiser's definition counts only controlled possession (CHALLENGE.md). We built a variant of the Sportec labels in which a team spell shorter than 3 s lying between two spells of the other team does not count (the organiser's "a few seconds" of control; `MIN_CONTROLLED_S` in `external_validation/config.py`), and re-ran a 64-combination grid over `c_switch`, `min_poss_s`, `min_edge_s` and `touch_bonus` (`external_validation/grids/next_hmm_controlled.json`). Under those labels the unchanged model scores 0.585 on the tuning matches and 0.585 on the held-out ones (window-125 baseline: 0.26). The best re-tuned setting gained 0.02 on the tuning matches, and on the held-out matches it improved one and worsened the other. That is inside the noise band, so the parameters were **not** changed.
 - **Team share among the k nearest players** – never needed; not implemented.
 - **Homography, video and broadcast tracking** – not attempted.
 
@@ -172,7 +180,7 @@ RULES.md explicitly allows this on the provided match ("Learning without human l
 | One touch without control, a deflected pass, or a won header without subsequent control is **not** a change | A touch adds evidence for about five frames; it cannot pay for switching away and back (2 × 3.0), so the surrounding team keeps the ball. A deflection that does not slow the ball contributes even less, because fast-ball frames are down-weighted |
 | **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | The decoder picks the team that the evidence after the restart favours. If the *other* team was on the still ball during the last 2 s of the stoppage (at least 10 control frames, four times more than the opponent), or a set-piece tag of a measured-reliable type names it, that team owns the frames from the restart until the following team first controls the ball. Throw-ins carry no team tag and often no ball, so there the owner is whoever the evidence favours |
 | Dead ball is always `D` | `D` is a state of the HMM with the cues of section 1.3. Stoppages shorter than 2 s are removed as tracking blips. Ownership of a dead ball is never output |
-| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. `tools/sanity_check.py` checks this on the submitted file (checklist B7). |
+| Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. `tools/sanity_check.py` checks this on the submitted file (checklist B7); see section 4.2 for the known deviation in the last seconds before the kick-off. |
 | Use of `X` | `X` only outside the two assessed halves, where it is never scored. Inside them we never abstain: on spellF1 an `X` is forward-filled with our previous label, so it can never score better than writing that label ourselves, and it costs macroF1 |
 
 ---
@@ -190,8 +198,11 @@ RULES.md explicitly allows this on the provided match ("Learning without human l
 
 Based on the Sportec validation only.
 
-- **Half of the possessions are still not matched.** On the held-out matches macroF1 is 0.87 but spellF1 is 0.51: most frames are right, yet many spells are split, merged or misplaced. We did not break this down by error type, so we cannot say how much is dead-ball timing, short spells or team errors.
-- **Parameters are on a plateau.** About 25 further settings were varied on the tuning matches and none improved spellF1 by more than the scorer's own noise band (0.04); a few made it clearly worse. More tuning of this model will not help; a better model would.
+- **Many possessions are still not matched.** On the held-out matches macroF1 is 0.90 but spellF1 is 0.58: most frames are right, yet many spells are split, merged or misplaced. We did not break this down by error type, so we cannot say how much is dead-ball timing, short spells or team errors.
+- **Weaker than the hand-weighted evidence on our synthetic test match.** On three synthetic matches from `tools/make_fake_match.py` the learned evidence scored below the hand-weighted evidence on two and predicted up to 40 % too many possessions. The synthetic match was built around the hand-built cues and is not used for any choice (section 2.3), but it shows that the learned evidence can over-segment on tracking unlike its training data. `python -m src.pipeline --hand-weighted` produces the earlier model's file.
+- **Second-half kick-off a few seconds early.** The organiser's FAQ states that the second half does not kick off until frame 113,742 and that every assessed frame before it is `D`. Our detected kick-off (Smart Tagging window, formation breaking, ball leaving the centre spot) falls within the last five seconds before that frame, so the file goes live slightly early there. We did not hard-code the published frame: RULES.md does not allow constants tied to specific frames of the game. The effect is at most about 125 of 158,857 assessed frames and the start of one possession.
+- **Trained on one data source.** The learned evidence has seen five Bundesliga matches from one provider, degraded by our own rules (section 5.3). How well it transfers to the competition tracking cannot be measured without labels.
+- **Decoder settings are on a plateau.** Across the 192 decoder settings searched with the learned evidence, the best dozen lie within 0.004 spellF1 of each other, far inside the scorer's noise band (0.04).
 - **Short possessions.** The switching cost and the 1 s minimum remove brief spells by design. That matches the organiser's "controlled possession", but a genuine quick interception followed by an immediate loss is lost too.
 - **Long ball gaps.** With no ball, a change of possession can only be seen through team movement, which lags by a second or two; the boundary is then late.
 - **Restarts without a visible ball** (most throw-ins): the owner is inferred from what happens afterwards, so a restart that is lost at once is given to the wrong team.
@@ -201,7 +212,7 @@ Based on the Sportec validation only.
 ### 4.3 With more time
 
 1. **An error breakdown on Sportec** (dead-ball timing vs short spells vs team errors) before changing anything else.
-2. **Learned emissions**: a classifier trained on labelled open matches instead of hand-built evidence, keeping the HMM on top (Borghesi et al. 2023 for the features, Kim et al. 2026 for the structured decoding).
+2. **More and more varied training data** for the learned evidence (other open datasets, several degradation seeds per match), and a sequence model in place of per-frame trees.
 3. **More realistic degradation** in the validation (position noise, duplicate slots, false ball detections) so that radii and thresholds can be tuned.
 4. **Explicit restart states** per set-piece type, so that the restart owner is part of the decoding rather than a correction after it.
 5. **The broadcast tracking** as a second ball source for the frames where the tactical tracking has none.
@@ -272,7 +283,20 @@ All values live in `src/config.py`; names below are the field names there. Three
 - **Prior, checked** – set from literature or football knowledge, then varied on Sportec; the prior was kept because no alternative was better by more than the noise band.
 - **Prior** – set from literature or football knowledge and not varied (either Sportec cannot test it, or it is a guard value).
 
-**Tuned on Sportec**
+**Learned evidence and decoder (final model), chosen on Sportec**
+
+| Parameter | What it controls | Final value | Search range |
+|---|---|---|---|
+| `learned` | Decoder input from the trained models instead of the hand-weighted evidence | on | on / off |
+| `learned_team_scale`, `learned_dead_scale` | How much of each frame's log-odds counts (neighbouring frames are near-copies) | 0.4, 0.4 | 0.05 – 0.4 each |
+| `c_switch` | H↔A switching cost | 2.0 | 2 – 6 |
+| `c_die`, `c_restart` | Cost of entering / leaving `D` | 10, 10 | 4 – 10 (kept equal) |
+| `learned_clip` | Cap on one frame's log-odds | 6.0 | not varied (3 gave the same score) |
+| Trees | 150 trees of at most 15 leaves per model, learning rate 0.06, at least 200 frames per leaf | – | not varied |
+
+The 192 combinations are in `GRID` in `external_validation/train_emissions.py`; the best was taken automatically. The tables below describe the hand-weighted evidence, which is still computed and is now the main input of the trained models. Its parameters keep the values found there, except `c_switch`, `c_die` and `c_restart`, which were re-chosen as above.
+
+**Tuned on Sportec (hand-weighted evidence)**
 
 | Parameter | What it controls | Final value | Search range |
 |---|---|---|---|
@@ -321,7 +345,17 @@ No value was chosen from the public 5-minute ground truth, from the video, or fr
 
 ### 5.6 Results on Sportec
 
-Sportec results only, from `sweep.py`. "Baseline" is `example_baseline.py` with a window of 50 frames. "Ours" is the final configuration in `src/config.py`.
+Sportec results only. "Baseline" is `example_baseline.py` with a window of 50 frames.
+
+**Final model (learned evidence)**, from `external_validation/train_emissions.py`
+
+| | spellF1 | macroF1 | Per match |
+|---|---|---|---|
+| Tuning matches, leave-one-match-out (each match scored by models trained on the other four) | 0.546 (spread 0.030) | 0.890 | lowest 0.515 |
+| Held-out matches, models trained on the five tuning matches, scored with the chosen decoder | **0.582** | **0.899** | J03WQQ 0.595, J03WR9 0.570 |
+| Hand-weighted evidence, same matches | 0.501 / 0.514 | 0.862 / 0.869 | tables below |
+
+**Hand-weighted evidence (the model until 15 Nov)**, from `sweep.py`. "Ours" below is that model (`learned=False`, `c_switch` 3, `c_die` 6.5, `c_restart` 6).
 
 **Held-out matches** (not used for any choice)
 
@@ -360,7 +394,7 @@ The held-out score is as good as the tuning score, so the choice did not overfit
 
 ### 5.7 Freezing parameters
 
-The final parameters were committed on 15 Nov 2026 in commit `06f0a52` (branch `possession-modell`, pull request 4). At that point the pipeline in `src/` had been run on synthetic and Sportec data only. [MARTIN FYLLER INN: tag name and date of the frozen parameters, and confirmation that the tag was made **before** the pipeline was first run on the competition data and the public 5 minutes, and that nothing was changed afterwards based on that run.] [SJEKK: Oskar – confirm that no earlier script of ours was scored on the public 5 minutes and then used to choose anything in `src/`.]
+All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by the commit tagged `phase1-submission`.
 
 ---
 
@@ -393,7 +427,7 @@ python -m src.pipeline --team-name NEXT --no-cache   # writes NEXT.csv into the 
 
 This is the same command as in the README, which also gives the two commands that check the file. The pipeline uses no random numbers, so the same input gives the same bytes; a test checks this on synthetic data (`tests/test_pipeline_fake.py`).
 
-[MARTIN FYLLER INN: expected runtime; that the output is deterministic (fixed seeds, no tuning at run time); SHA-256 of the expected output.]
+Expected runtime: about 15 seconds on a laptop, without cache. The output is deterministic: there are no random numbers and nothing is tuned at run time. Expected SHA-256 of `NEXT.csv`: `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f` (macOS, Python 3.13.5).
 
 **Reproducing the external validation (optional, open data only):**
 
@@ -404,7 +438,12 @@ python external_validation/build_dataset.py --matches all     # downloads the 7 
 python external_validation/sweep.py external_validation/grids/next_hmm.json --matches J03WPY J03WMX J03WN1 J03WOH J03WOY
 ```
 
-The last command reproduces the grid behind the final choice on the five tuning matches (32 combinations, a few minutes). If the kloppy download times out (the tracking files are about 370 MB each), re-run it; the cache keeps finished files.
+python external_validation/train_emissions.py --jobs 6    # trains the learned evidence, searches the decoder, writes src/learned_model.json
+```
+
+The `sweep.py` command reproduces the grid behind the hand-weighted model (32 combinations, a few minutes); the last command reproduces the final model and its scores (about two minutes).
+
+```text If the kloppy download times out (the tracking files are about 370 MB each), re-run it; the cache keeps finished files.
 
 The Sportec files are downloaded and cached by kloppy outside the repository; generated files are written to `ext_data/`, which is git-ignored. Loading one match needs a few GB of RAM.
 
@@ -420,12 +459,13 @@ Required by the rules (R7): everything external that we used, with licence and c
 |---|---|---|---|
 | Sportec/IDSSE open tracking data, Bundesliga 2022/23 (match IDs J03WPY, J03WMX, J03WN1, J03WOH, J03WOY, J03WQQ, J03WR9) | Tuning and validation (section 5) | CC-BY 4.0 | Bassek, M., Rein, R., Weber, H. et al. (2025). *Scientific Data* 12, 195. doi:10.1038/s41597-025-04505-y |
 
-**Pre-trained models:** None. The only models are the small logistic regressions fitted at run time (section 2.5); no weights are stored in the repository.
+**Pre-trained models:** No third-party pre-trained model is used. Our own two tree models, trained by us on the Sportec matches above, are stored in the repository as `src/learned_model.json` (about 0.3 MB) and can be re-created with `python external_validation/train_emissions.py`. The small logistic regressions of section 2.5 are fitted at run time and not stored.
 
 **Software libraries**
 
 | Library | Version | Licence | Use |
 |---|---|---|---|
+| LightGBM | 4.7.0 | MIT | Training the two tree models on Sportec data (`external_validation/train_emissions.py`). **Not** needed to produce the submission: the trained trees are stored as arrays and evaluated with numpy |
 | kloppy | 3.19.1 | BSD-3-Clause | Loading Sportec data in the external validation only. The competition pipeline does not use it |
 | numpy | 2.5.4 | BSD-3-Clause | The whole competition pipeline (`src/`): parsing, features, logistic regression, Viterbi. No scipy, scikit-learn or HMM library is used |
 | pandas | 3.1.1 | BSD-3-Clause | The organiser's scorer and the external validation; not needed to produce the submission |

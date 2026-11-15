@@ -314,6 +314,38 @@ def restart_possessor(states, ctrl, offset, set_piece_side, cfg):
 
 
 # ---------------------------------------------------------------------------------------- main
+def decode_states(team_llr, dead_llr, ctrl, feats, blocks, set_piece_side, cfg):
+    """Viterbi and the clean-up steps, one int8 state array per block."""
+    out = []
+    for first, last in blocks:
+        sl = slice(first, last + 1)
+        half_llr = 0.5 * team_llr[sl]
+        states = viterbi(half_llr, -half_llr, dead_llr[sl], cfg.c_switch, cfg.c_die, cfg.c_restart)
+        states = enforce_durations(states, cfg)
+        if cfg.refine:
+            states = refine_boundaries(states, ctrl, feats, first, cfg)
+            states = enforce_durations(states, cfg)
+        if cfg.use_restart:
+            states = restart_possessor(states, ctrl, first, set_piece_side, cfg)
+        out.append(states)
+    return out
+
+
+def learned_llr(z_team, z_dead, tag_team, tag_dead, graded, cfg):
+    """Decoder inputs from the learned log-odds, plus the Smart Tagging terms."""
+    clip = cfg.learned_clip
+    team = cfg.learned_team_scale * np.clip(z_team, -clip, clip) + tag_team
+    dead = cfg.learned_dead_scale * np.clip(z_dead, -clip, clip) + tag_dead
+    return np.where(graded, team, 0.0), np.where(graded, dead, 0.0)
+
+
+def _labels(decoded, blocks, n):
+    labels = np.full(n, "X", dtype="<U1")
+    for (first, last), states in zip(blocks, decoded):
+        labels[first:last + 1] = LETTERS[states]
+    return labels
+
+
 def decode(feats, dead_llr, tags, names, blocks, cfg=None):
     """Labels 'H' / 'A' / 'D' / 'X' for every video frame, and a dict of diagnostics.
 
@@ -339,24 +371,27 @@ def decode(feats, dead_llr, tags, names, blocks, cfg=None):
                 side = side_of(t["tags"].get("team"), names)
                 if t["code"] == "set pieces" and side:
                     set_piece_side[max(0, t["start"] - pad):min(n, t["end"] + pad)] = side
+    if cfg.learned:
+        # Evidence from the models trained on open matches (learned.py). Their inputs are the
+        # tag-free hand evidence, exactly as in training; what Smart Tagging adds (team prior,
+        # set pieces, the stretch before kick-off) is put back on top.
+        from . import deadball, learned
+        dead_hand, _ = deadball.compute(feats, [], blocks, cfg)
+        hint = hint_evidence(feats, ball_llr, dead_hand, blocks, cfg) if cfg.use_hint \
+            else np.zeros(n)
+        z_team, z_dead = learned.emissions(feats, ball_llr, hint, dead_hand, blocks)
+        team_llr, dead_llr = learned_llr(z_team, z_dead, team_llr - ball_llr,
+                                         dead_llr - dead_hand, graded, cfg)
+        decoded = decode_states(team_llr, dead_llr, ctrl, feats, blocks, set_piece_side, cfg)
+        return _labels(decoded, blocks, n), {"ball_llr": ball_llr, "team_llr": team_llr,
+                                             "tag_polarity": polarity}
+
     hint = hint_evidence(feats, ball_llr, dead_llr, blocks, cfg) if cfg.use_hint else None
     if cfg.use_hint:
         team_llr += hint
 
     def run(team, dead):
-        out = []
-        for first, last in blocks:
-            sl = slice(first, last + 1)
-            half_llr = 0.5 * team[sl]
-            states = viterbi(half_llr, -half_llr, dead[sl], cfg.c_switch, cfg.c_die, cfg.c_restart)
-            states = enforce_durations(states, cfg)
-            if cfg.refine:
-                states = refine_boundaries(states, ctrl, feats, first, cfg)
-                states = enforce_durations(states, cfg)
-            if cfg.use_restart:
-                states = restart_possessor(states, ctrl, first, set_piece_side, cfg)
-            out.append(states)
-        return out
+        return decode_states(team, dead, ctrl, feats, blocks, set_piece_side, cfg)
 
     decoded = run(team_llr, dead_llr)
     base_llr = team_llr - hint if cfg.use_hint else team_llr
@@ -379,7 +414,5 @@ def decode(feats, dead_llr, tags, names, blocks, cfg=None):
         team_llr = base_llr + hint2
         decoded = run(team_llr, dead2)
 
-    labels = np.full(n, "X", dtype="<U1")
-    for (first, last), states in zip(blocks, decoded):
-        labels[first:last + 1] = LETTERS[states]
-    return labels, {"ball_llr": ball_llr, "team_llr": team_llr, "tag_polarity": polarity}
+    return _labels(decoded, blocks, n), {"ball_llr": ball_llr, "team_llr": team_llr,
+                                         "tag_polarity": polarity}

@@ -26,11 +26,14 @@ def _frames(sim):
 def test_predict_matches_pipeline(fake_match):
     sim = fake_match["sim"]
     tracking, slots = _frames(sim)
-    got = extval.predict(tracking, slots, pitch=(105.3, 68.0), use_tags=False)
-    want, _ = pipeline.label_match(fake_match["dir"], sim["blocks"], sim["n_frames"],
-                                   cfg=Config(use_tags=False), use_cache=False)
-    assert len(got) == len(tracking)
-    assert np.mean(got == want) > 0.995      # only float32 rounding of the text files differs
+    hand = dict(learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0, kick_late=False)
+    # only float32 rounding of the text files differs; tree thresholds amplify it a little
+    for params, agree in ((hand, 0.995), ({}, 0.97)):
+        got = extval.predict(tracking, slots, pitch=(105.3, 68.0), use_tags=False, **params)
+        want, _ = pipeline.label_match(fake_match["dir"], sim["blocks"], sim["n_frames"],
+                                       cfg=Config(use_tags=False).with_(**params), use_cache=False)
+        assert len(got) == len(tracking)
+        assert np.mean(got == want) > agree
 
 
 def test_params_reach_the_model(fake_match):

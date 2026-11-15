@@ -5,7 +5,7 @@ import numpy as np
 from src.config import Config
 from src.possession import A, D, H, enforce_durations, runs_of, side_of, viterbi
 
-CFG = Config()
+CFG = Config().hand_weighted()     # these arrays are on the scale of the hand-weighted evidence
 
 
 def _decode(llr, dead, cfg=CFG):

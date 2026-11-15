@@ -141,6 +141,7 @@ Jeg har **ikke** antatt noe om disse. De bør med i neste e-post til arrangøren
 | Lagnavn (limt inn fra påmelding) | NEXT (bekreft mot påmeldingen, se A3) |
 | Commit-hash (`main`) | |
 | SHA-256 av `NEXT.csv` | `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f` (Mac, Oskar, 15. nov, kode fra commit `8302bbf`) |
+| SHA-256 av reservefilen (`--hand-weighted`, forrige modell) | `67c0e624f7b3cc16ea832f04eb2d44f328216bfddac78ddbde4d33739a31280a` (Mac, Oskar, 15. nov) |
 | SHA-256 fra ren klon – Windows | |
 | SHA-256 fra ren klon – Mac | |
 | `validate_submission.py` godkjent (dato, av hvem) | |

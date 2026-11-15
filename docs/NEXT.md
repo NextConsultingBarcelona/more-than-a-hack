@@ -65,8 +65,6 @@ A frame with no evidence scores 0 for all three states, so the decoder simply st
 
 ### 1.3 Dead-ball model (D) and transitions
 
-[SJEKK: Martin – this describes the code as it is in `src/deadball.py` and `src/possession.py`; confirm or correct.]
-
 `D` is a state of the same HMM, not a separate model run first. Its evidence `dead_llr` is a sum of:
 
 - **ball outside the pitch** by more than 0.75 m (strongest cue);
@@ -80,7 +78,7 @@ A frame with no evidence scores 0 for all three states, so the decoder simply st
 
 **Restart owner.** The team whose player is on the still ball in the last 2 s of the stoppage, or the team named by a set-piece tag when that tag type has been measured to name the taker (section 1.4).
 
-**Second-half kick-off.** Assessed frames before the kick-off are forced to `D`. The kick-off frame is not hard-coded: the Smart Tagging "Kick Off (Start)" tag gives a window, and inside it the kick is pinned by the formation breaking and, where the ball is seen, by the ball leaving the centre spot.
+**Second-half kick-off.** Assessed frames before the kick-off get an overwhelming dead-ball term (`w_prekick`), so they come out as `D`. The kick-off frame is not hard-coded: the Smart Tagging "Kick Off (Start)" tag gives a window, and inside it the kick is pinned by the formation breaking and, where the ball is seen, by the ball leaving the centre spot.
 
 ### 1.4 Cues ("hints") from tracking
 
@@ -116,7 +114,7 @@ The HMM is interpretable, is deterministic (so the submitted file can be reprodu
 
 | Source | Used? | How it was used |
 |---|---|---|
-| Tracking data (ATD, EPTS format), tactical | Yes | Main input for all cues. Read by our own parser (`src/io.py`, numpy only, no kloppy), indexed by video frame (`frame_id − 1`). Missing values stay NaN and every feature is NaN-aware. Track slots are never treated as persons: all cues are per team (nearest player, centroid, spread), so slots that appear, vanish or swap do not matter. Duplicate slots are not removed. [SJEKK: Martin confirm] |
+| Tracking data (ATD, EPTS format), tactical | Yes | Main input for all cues. Read by our own parser (`src/io.py`, numpy only, no kloppy), indexed by video frame (`frame_id − 1`). Missing values stay NaN and every feature is NaN-aware. Track slots are never treated as persons: all cues are per team (nearest player, centroid, spread), so slots that appear, vanish or swap do not matter. Duplicate slots are not removed |
 | Smart Tagging | Yes | Four uses: (1) the kick-off tag anchors the search for each half's kick-off; (2) the seconds before a tagged set piece, and the span from a tagged goal to its kick-off, count for dead ball; (3) phase `Team` tags give a weak team prior with measured polarity (section 1.4); (4) a set-piece `Team` tag can name the restart owner. It is treated as automatic evidence, not ground truth; `N/A` team tags (all throw-ins) are ignored. Team names are matched to home/away by string similarity, since the tagging and the tracking metadata spell them differently |
 | Homography | No | Not needed: all cues come from pitch coordinates in the tracking |
 | Tactical video | No | Not used as model input. Our labels were **never compared with the video** (rule R8). Team members watched the video only to understand what counts as possession, which the organiser explicitly allows. [SJEKK: Oskar and Martin confirm] |
@@ -171,7 +169,7 @@ RULES.md explicitly allows this on the provided match ("Learning without human l
 | **Loose balls** (50/50, ball rolling after a tackle): the last team in possession keeps it | A frame without evidence scores 0 for every state and staying is free, so the decoder keeps the last team. This covers a ball in flight, a ball rolling away from everyone, and a ball the tracker has lost |
 | Possession changes only when a player of the other team has **control** | "Control" on a frame = ball within 2 m of a player, that team clearly nearer than the other, ball slower than about 10 m/s. A change needs enough such frames to outweigh the switching cost (3.0), and a spell shorter than 1 s between two spells of the other team is removed. The boundary is then placed on the first frame of that control, so the pass before it stays with the passer |
 | One touch without control, a deflected pass, or a won header without subsequent control is **not** a change | A touch adds evidence for about five frames; it cannot pay for switching away and back (2 × 3.0), so the surrounding team keeps the ball. A deflection that does not slow the ball contributes even less, because fast-ball frames are down-weighted |
-| **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | The decoder picks the team that the evidence after the restart favours. If the *other* team was on the still ball during the last 2 s of the stoppage (at least 10 control frames, four times more than the opponent), or a set-piece tag of a measured-reliable type names it, that team owns the frames from the restart until the following team first controls the ball. Throw-ins carry no team tag and often no ball, so there the owner is whoever the evidence favours. [SJEKK: Martin confirm] |
+| **Restarts** (kick-off, throw-in, corner, goal kick, free kick) have a clear owner | The decoder picks the team that the evidence after the restart favours. If the *other* team was on the still ball during the last 2 s of the stoppage (at least 10 control frames, four times more than the opponent), or a set-piece tag of a measured-reliable type names it, that team owns the frames from the restart until the following team first controls the ball. Throw-ins carry no team tag and often no ball, so there the owner is whoever the evidence favours |
 | Dead ball is always `D` | `D` is a state of the HMM with the cues of section 1.3. Stoppages shorter than 2 s are removed as tracking blips. Ownership of a dead ball is never output |
 | Two halves; the second half is assessed from frame 110 808 while kick-off is at 113 742 | The assessed spans are read from the organiser's `games.half_video_blocks()` (11 185–90 651 and 110 808–190 197); each half is decoded on its own. The kick-off frame is **not** hard-coded: assessed frames before the detected kick-off are forced to `D` (section 1.3). No other frame number appears in the code. `tools/sanity_check.py` checks this on the submitted file (checklist B7). |
 | Use of `X` | `X` only outside the two assessed halves, where it is never scored. Inside them we never abstain: on spellF1 an `X` is forward-filled with our previous label, so it can never score better than writing that label ourselves, and it costs macroF1 |
@@ -421,7 +419,7 @@ Required by the rules (R7): everything external that we used, with licence and c
 |---|---|---|---|
 | Sportec/IDSSE open tracking data, Bundesliga 2022/23 (match IDs J03WPY, J03WMX, J03WN1, J03WOH, J03WOY, J03WQQ, J03WR9) | Tuning and validation (section 5) | CC-BY 4.0 | Bassek, M., Rein, R., Weber, H. et al. (2025). *Scientific Data* 12, 195. doi:10.1038/s41597-025-04505-y |
 
-**Pre-trained models:** None. The only models are the small logistic regressions fitted at run time (section 2.5); no weights are stored in the repository. [SJEKK: Martin confirm]
+**Pre-trained models:** None. The only models are the small logistic regressions fitted at run time (section 2.5); no weights are stored in the repository.
 
 **Software libraries**
 

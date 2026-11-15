@@ -27,6 +27,22 @@ import games  # noqa: E402
 SECOND_HALF_KICKOFF = 113742
 
 
+def early_start(labels, first, last, fps=25):
+    """Coarse description of where the non-D frames of a pre-kick-off span lie. No numbers."""
+    wrong = [i for i in range(first, last + 1) if labels[i] != "D"]
+    if not wrong:
+        return ""
+    lead = last + 1 - wrong[0]                       # frames from the earliest one to the kick-off
+    for seconds, text in ((1, "bare siste sekund"), (5, "siste 5 s"), (30, "siste 30 s")):
+        if lead <= seconds * fps:
+            break
+    else:
+        text = "tidligere enn 30 s"
+    whole = wrong == list(range(wrong[0], last + 1))
+    return "{} for avspark, {}".format(
+        text, "sammenhengende fram til avspark" if whole else "i flere biter")
+
+
 def check(path, n_frames, blocks, dead_spans):
     """[(name, ok)] for the file at path. blocks and dead_spans are inclusive (first, last)."""
     raw = Path(path).read_bytes()
@@ -54,8 +70,9 @@ def check(path, n_frames, blocks, dead_spans):
     results.append(("bare X utenfor omgangene",
                     all(lab == "X" for lab, g in zip(labels, graded) if not g)))
     for first, last in dead_spans:
-        results.append(("D for avspark ({}-{})".format(first, last),
-                        all(lab == "D" for lab in labels[first:last + 1])))
+        where = early_start(labels, first, last)
+        results.append(("D for avspark ({}-{}){}".format(first, last, ": ikke-D " + where if where else ""),
+                        not where))
     return results
 
 

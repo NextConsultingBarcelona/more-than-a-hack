@@ -41,6 +41,17 @@ def test_broken_files_fail(fake_match, fake_labels, tmp_path):
 
     assert failed(_write(tmp_path, labels[:-1]))        # one row short
 
+    span = (first, first + 999)                         # where the early start lies, coarsely
+    for start, text in ((990, "bare siste sekund"), (900, "siste 5 s"), (400, "siste 30 s"),
+                        (100, "tidligere enn 30 s")):
+        bad = labels.copy()
+        bad[first:first + 1000] = "D"
+        bad[first + start:first + 1000] = "H"
+        assert sanity_check.early_start(bad, *span).startswith(text)
+        assert sanity_check.early_start(bad, *span).endswith("sammenhengende fram til avspark")
+    bad[first + 50:first + 60] = "A"
+    assert sanity_check.early_start(bad, *span).endswith("i flere biter")
+
     crlf = tmp_path / "crlf.csv"
     crlf.write_bytes(b"\xef\xbb\xbf" + open(_write(tmp_path, labels), "rb").read()
                      .replace(b"\n", b"\r\n"))

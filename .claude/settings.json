@@ -4,8 +4,10 @@
     "deny": [
       "Read(./data/**)",
       "Read(./evaluation/gt/**)",
+      "Read(./evaluation/results/**)",
       "Edit(./data/**)",
       "Edit(./evaluation/gt/**)",
+      "Edit(./evaluation/results/**)",
       "Edit(./CLAUDE.md)",
       "Edit(./.claude/**)",
       "Edit(./.githooks/**)",

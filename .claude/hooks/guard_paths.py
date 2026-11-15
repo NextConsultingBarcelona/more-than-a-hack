@@ -18,7 +18,7 @@ except Exception:
     pass
 
 # Relative til prosjektroten. Kampdata skal ligge UTENFOR repoet, men disse sperres uansett.
-REL_FORBIDDEN = ["data", "evaluation/gt"]
+REL_FORBIDDEN = ["data", "evaluation/gt", "evaluation/results"]
 # Filer Claude ikke skal kunne endre (verktøy som redigerer filer).
 PROTECTED_EDIT = ["CLAUDE.md", ".claude", ".githooks",
                   "tools/check_no_data.py", "tools/setup_guards.py", "tools/test_guards.py"]
@@ -137,7 +137,7 @@ def check_file_tool(tool, ti, root, cwd, roots):
         val = ti.get(key)
         if isinstance(val, str) and is_search:
             t = norm(val)
-            if re.search(r"(?<![\w.\-])(data|gt)/", t) or "evaluation/gt" in t:
+            if re.search(r"(?<![\w.\-])(data|gt)/", t) or "evaluation/gt" in t or "evaluation/results" in t:
                 block("Søkemønsteret peker mot en datamappe.")
 
 
@@ -155,8 +155,8 @@ def check_shell(command, root, roots):
             if variant in text or variant in text_alt:
                 block("Kommandoen peker mot en forbudt datamappe.")
     if re.search(r"(?<![\w.\-])data/", text) or re.search(r"(?<![\w.\-])gt/", text) \
-            or "evaluation/gt" in text:
-        block("Kommandoen peker mot data/ eller evaluation/gt/.")
+            or "evaluation/gt" in text or "evaluation/results" in text:
+        block("Kommandoen peker mot data/, evaluation/gt/ eller evaluation/results/.")
 
     # Bare mappenavn som argument til fil-kommandoer: "cd data", "ls gt"
     for seg in re.split(r"[;&|\n]+", command):
@@ -174,7 +174,7 @@ def check_shell(command, root, roots):
         if first in FILE_CMDS:
             for t in toks[1:]:
                 t_n = norm(t).rstrip("/")
-                if t_n in ("data", "gt", "evaluation/gt", "./data", "./gt"):
+                if t_n in ("data", "gt", "evaluation/gt", "./data", "./gt", "evaluation/results", "./evaluation/results"):
                     block("Kommandoen peker mot en forbudt datamappe (%s)." % t)
 
     for tok in re.findall(r"[^\s\"'=;|&<>()]+", text):

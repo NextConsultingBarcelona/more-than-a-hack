@@ -88,3 +88,6 @@ test_data/
 .claude/settings.local.json
 .claude/data_dirs.local.txt
 # <<< MTAH-sperrer <<<
+
+# Ekstern validering: genererte filer fra åpne Sportec-data (ikke konkurransedata). Skal ikke committes.
+ext_data/

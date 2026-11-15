@@ -26,7 +26,7 @@ def _frames(sim):
 def test_predict_matches_pipeline(fake_match):
     sim = fake_match["sim"]
     tracking, slots = _frames(sim)
-    hand = dict(learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0)
+    hand = dict(learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0, kick_late=False)
     # only float32 rounding of the text files differs; tree thresholds amplify it a little
     for params, agree in ((hand, 0.995), ({}, 0.97)):
         got = extval.predict(tracking, slots, pitch=(105.3, 68.0), use_tags=False, **params)

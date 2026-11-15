@@ -57,3 +57,18 @@ def test_learned_pipeline_on_a_fake_match(fake_match):
     assert set(labels[~graded]) == {"X"}
     res = pm.evaluate(pm.label_codes(sim["truth"]), pm.label_codes(labels))
     assert res["macro_f1"] > 0.6                               # sensible, not a tuned target
+
+
+def test_no_live_ball_before_the_second_half_kickoff(tmp_path):
+    """Also when the ball is hidden on the spot before the kick (seed 1 of the fake match)."""
+    import make_fake_match
+
+    for seed in (1, 7):
+        out = str(tmp_path / "m{}".format(seed))
+        sim = make_fake_match.simulate(seed=seed, half_s=300.0)
+        make_fake_match.write(sim, out)
+        labels, _ = pipeline.label_match(out, sim["blocks"], sim["n_frames"], use_cache=False)
+        first, kick = sim["blocks"][1][0], sim["kickoffs"][1]
+        assert np.all(labels[first:kick] == "D")
+        alive = np.flatnonzero(labels[kick:kick + 100] != "D")
+        assert len(alive) and int(alive[0]) <= 25             # live within 1 s of the kick

@@ -1,6 +1,9 @@
 {
   "model": "src.extval:predict",
   "grid": {
+    "kick_late": [
+      false
+    ],
     "learned": [
       false
     ],

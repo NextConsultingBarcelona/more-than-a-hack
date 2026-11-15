@@ -74,6 +74,7 @@ class Config:
     setpiece_pre_s: float = 3.0
     w_goal: float = 0.5            # between a tagged goal and the kick-off that follows it
     w_prekick: float = 8.0         # graded frames before the half's kick-off
+    kick_late: bool = True         # kick-off = latest frame the evidence allows, not the earliest
     dead_selftrain: bool = True
     dead_min_frames: int = 300
     dead_shrink: float = 0.25
@@ -115,7 +116,8 @@ class Config:
     def hand_weighted(self):
         """The model as it was before the learned evidence: hand-weighted evidence and the
         transition costs tuned for it (external_validation/grids/next_hmm.json)."""
-        return replace(self, learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0)
+        return replace(self, learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0,
+                       kick_late=False)
 
     def with_(self, **changes):
         return replace(self, **changes)

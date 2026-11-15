@@ -42,7 +42,8 @@ python -m src.pipeline --team-name NEXT --no-cache
 ```
 
 The pipeline uses no random numbers and all parameters are fixed in `src/config.py`, so the same
-input gives the same bytes. To check the file:
+input gives the same bytes: the expected SHA-256 of `NEXT.csv` is
+`f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`. To check the file:
 
 ```bash
 python evaluation/validate_submission.py evaluation/results/NEXT.csv

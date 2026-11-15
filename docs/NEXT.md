@@ -14,8 +14,8 @@
 | **Team** | NEXT [SJEKK: identical to the registration, character for character] |
 | **Members** | Oskar Rändel (captain, possession model) · Martin (dead-ball model, pipeline, submission) · Morten (external validation, QA, documentation) |
 | **Repository** | https://github.com/NextConsultingBarcelona/more-than-a-hack |
-| **Commit / tag** | `[MARTIN FYLLER INN: commit hash]` / `phase1-submission` |
-| **Submitted file** | `NEXT.csv` (SHA-256: `[MARTIN FYLLER INN: hash from checklist B6]`) |
+| **Commit / tag** | the commit tagged `phase1-submission` |
+| **Submitted file** | `NEXT.csv` (SHA-256: `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`) |
 
 ---
 
@@ -394,7 +394,7 @@ The held-out score is as good as the tuning score, so the choice did not overfit
 
 ### 5.7 Freezing parameters
 
-All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by commit `[MARTIN FYLLER INN: commit hash]`.
+All parameters and both trained models were chosen on Sportec data only, as described in sections 5.4–5.6: the hand-weighted evidence with the grid in `external_validation/grids/next_hmm.json`, and the learned evidence and its decoder settings with `external_validation/train_emissions.py`, under an adoption rule fixed beforehand (better on the tuning matches and on both held-out matches). The submitted file is the one produced by the commit tagged `phase1-submission`.
 
 ---
 
@@ -427,7 +427,7 @@ python -m src.pipeline --team-name NEXT --no-cache   # writes NEXT.csv into the 
 
 This is the same command as in the README, which also gives the two commands that check the file. The pipeline uses no random numbers, so the same input gives the same bytes; a test checks this on synthetic data (`tests/test_pipeline_fake.py`).
 
-[MARTIN FYLLER INN: expected runtime; that the output is deterministic (fixed seeds, no tuning at run time); SHA-256 of the expected output.]
+Expected runtime: about 15 seconds on a laptop, without cache. The output is deterministic: there are no random numbers and nothing is tuned at run time. Expected SHA-256 of `NEXT.csv`: `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f` (macOS, Python 3.13.5).
 
 **Reproducing the external validation (optional, open data only):**
 

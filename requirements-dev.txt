@@ -1,0 +1,6 @@
+# Kun for utvikling og testing (ikke en del av innleverings-pipelinen).
+# Testet med: Python 3.13, numpy 2.5, pandas 3.0, pytest 9.1.
+# Philip låser eksakte versjoner når lagets Python-versjon er bestemt.
+numpy>=1.26
+pandas>=2.1
+pytest>=8.0

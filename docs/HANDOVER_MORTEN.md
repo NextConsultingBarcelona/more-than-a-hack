@@ -10,7 +10,7 @@ Morten har eksamen fra 16. nov og har svært begrenset tid. Oskar og Martin tar 
 | Generator for falske testdata | `test_data_generator/`, `tests/` (output i `test_data/`, ikke i git) | Grenen `test-data-generator`, PR til `main` i dag |
 | Ekstern validering (Sportec) | `external_validation/` (README forklarer alt) | Grenen `ekstern-validering`, PR til `main` i dag |
 | Sjekkliste før innlevering | `docs/SUBMISSION_CHECKLIST.md` | Samme PR |
-| Teknisk dokument (utkast) | `docs/NEXT.md`: plassholdere `[OSKAR FYLLER INN]`, `[MARTIN FYLLER INN]` og `[SJEKK]` | Samme PR |
+| Teknisk dokument (utkast) | `NEXT.md`: plassholdere `[OSKAR FYLLER INN]`, `[MARTIN FYLLER INN]` og `[SJEKK]` | Samme PR |
 | Svar fra arrangøren | `docs/organizer_answers.md` | Samme PR |
 
 ## 2. Oskar: slik tuner du parametere (obligatorisk etter R9)
@@ -33,7 +33,7 @@ python external_validation/sweep.py min_grid.json           # tester alle kombin
 |---|---|
 | Tuning av possession-modellen på Sportec (punkt 2) | **Oskar** |
 | Reproduksjonssjekk fra ren klon, Windows + Mac, samme SHA-256 (sjekkliste C1–C7) | **Martin** |
-| Ferdigstille `docs/NEXT.md` (egne plassholdere, deretter alle `[SJEKK]`) | **Oskar + Martin** |
+| Ferdigstille `NEXT.md` (egne plassholdere, deretter alle `[SJEKK]`) | **Oskar + Martin** |
 | Gå gjennom sjekklisten, samt innlevering via Google-skjemaet | **Martin** |
 
 ## 4. E-post til arrangøren

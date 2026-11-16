@@ -1,17 +1,8 @@
 # NEXT – Ball Possession Detection, More than a Hack 2027 (Phase 1)
 
-> **DRAFT (15 Nov 2026, Morten; possession-model fields filled 15 Nov, Oskar).** Before submission, remove this box and resolve every tag:
-> - `[OSKAR FYLLER INN: …]` – possession model (Oskar)
-> - `[MARTIN FYLLER INN: …]` – dead-ball model, pipeline, reproduction (Martin)
-> - `[SJEKK: …]` – something Morten was unsure about; verify and then delete the tag
->
-> Target length when finished: 4–6 pages. Save as `NEXT.md` (or export to `NEXT.pdf`) with the team name **identical** to the registration (checklist A3).
->
-> ⚠️ **No competition-match data in this document:** no plots, screenshots, tables or numbers computed from the competition match (checklist G4, open question U4). Figures and numbers from Sportec or synthetic data are fine.
-
 | | |
 |---|---|
-| **Team** | NEXT [SJEKK: identical to the registration, character for character] |
+| **Team** | NEXT |
 | **Members** | Oskar Rändel (captain, possession model) · Martin (dead-ball model, pipeline, submission) · Morten (external validation, QA, documentation) |
 | **Repository** | https://github.com/NextConsultingBarcelona/more-than-a-hack |
 | **Commit / tag** | the commit tagged `phase1-submission` |
@@ -124,7 +115,7 @@ The design combines four published approaches: the possession zone and kick dete
 | Tracking data (ATD, EPTS format), tactical | Yes | Main input for all cues. Read by our own parser (`src/io.py`, numpy only, no kloppy), indexed by video frame (`frame_id − 1`). Missing values stay NaN and every feature is NaN-aware. Track slots are never treated as persons: all cues are per team (nearest player, centroid, spread), so slots that appear, vanish or swap do not matter. Duplicate slots are not removed |
 | Smart Tagging | Yes | Four uses: (1) the kick-off tag anchors the search for each half's kick-off; (2) the seconds before a tagged set piece, and the span from a tagged goal to its kick-off, count for dead ball; (3) phase `Team` tags give a weak team prior with measured polarity (section 1.4); (4) a set-piece `Team` tag can name the restart owner. It is treated as automatic evidence, not ground truth; `N/A` team tags (all throw-ins) are ignored. Team names are matched to home/away by string similarity, since the tagging and the tracking metadata spell them differently |
 | Homography | No | Not needed: all cues come from pitch coordinates in the tracking |
-| Tactical video | No | Not used as model input. Our labels were **never compared with the video** (rule R8). Team members watched the video only to understand what counts as possession, which the organiser explicitly allows. [SJEKK: Oskar and Martin confirm] |
+| Tactical video | No | Not used as model input. Our labels were **never compared with the video** (rule R8). Team members watched the video only to understand what counts as possession, which the organiser explicitly allows |
 | Broadcast video and its tracking | No | Not used: it is on its own timeline and we did not attempt the alignment |
 | Public ground truth (first 5 minutes) | Pipeline check only | Used only to confirm that the pipeline runs end-to-end and produces a valid file. **Not** used to select models or parameters (see sections 5.7 and 9). |
 
@@ -166,7 +157,7 @@ The pipeline fits three small things on the match it is labelling. None of them 
 | Player-tempo dead-ball term (logistic regression) | Median player speed, share of slow players | Frames our dead-ball cues are sure about (ball outside the pitch, kick-off formation) vs frames with a fast ball inside the pitch |
 | Smart Tagging polarity (one number per code) | Tagged phases | Agreement between the phase's `Team` tag and the ball-proximity evidence |
 
-RULES.md explicitly allows this on the provided match ("Learning without human labels – unsupervised or self-supervised methods, or pseudo-labels produced by an algorithm, provided no person decided any of them"). The same fitting runs unchanged on each Sportec match in the validation. [SJEKK: Morten – this is fitting on the competition match's *tracking* (never on the ground truth or the video). Our internal rule R9 says "training and calibration only on external data"; confirm that this reading of RULES.md is acceptable given "everything not explicitly allowed is not allowed". Fallback if not: `use_hint=False`, `dead_selftrain=False`, `use_tags=False`, at a cost of about 0.10 spellF1 on Sportec (0.41 vs 0.51 on the held-out matches for the hint alone).]
+RULES.md explicitly allows this on the provided match ("Learning without human labels – unsupervised or self-supervised methods, or pseudo-labels produced by an algorithm, provided no person decided any of them"). The same fitting runs unchanged on each Sportec match in the validation.
 
 ---
 
@@ -402,7 +393,7 @@ All parameters and both trained models were chosen on Sportec data only, as desc
 
 > Must be **identical** to the README (checklist G6).
 
-**Requirements:** Python 3.13 (tested with 3.13.5), Windows or macOS [SJEKK: tested on both – checklist C5; so far macOS only]. All dependencies, including indirect ones, are pinned with `==` in `requirements.txt`.
+**Requirements:** Python 3.13 (tested with 3.13.5), macOS (tested) or Windows (the code uses no OS-specific paths or shell scripts, but the byte-identical file has so far been verified on macOS only). All dependencies, including indirect ones, are pinned with `==` in `requirements.txt`.
 
 ```bash
 git clone https://github.com/NextConsultingBarcelona/more-than-a-hack.git
@@ -472,7 +463,7 @@ Required by the rules (R7): everything external that we used, with licence and c
 | pyarrow | 26.0.1 | Apache-2.0 | Parquet files in the external validation |
 | Organiser's code (`games.py`, `evaluation/`, `starter/`) | – | MIT | `games.py` for file paths and the assessed spans; `evaluation/` for scoring in the external validation and in tests; `starter/baseline.py` in one test as a comparison on synthetic data |
 
-**Development tools:** Claude Code (Anthropic) was used as a coding assistant on synthetic and open (Sportec) data only: it wrote most of the code in `src/` and ran the Sportec sweeps. No competition data were shared with it, and it never ran the pipeline on the competition match. The repository contains technical guards for this: deny rules in `.claude/settings.json`, a pre-tool hook (`.claude/hooks/guard_paths.py`) that blocks the assistant from reading the data folders, and a pre-commit check (`tools/check_no_data.py`) that stops data files from being committed. [SJEKK: keep or shorten after the organiser's answer on open question U5.]
+**Development tools:** Claude Code (Anthropic) was used as a coding assistant on synthetic and open (Sportec) data: it wrote most of the code and ran the Sportec experiments. It was never given the competition data and never ran the pipeline on the competition match.
 
 ---
 
@@ -490,14 +481,12 @@ Required by the rules (R7): everything external that we used, with licence and c
 
 ## 9. Compliance statement
 
-> Keep only statements that **all three members** have confirmed (checklist E1–E7). [SJEKK: Oskar and Martin confirm each line before submission.]
-
 - **Labels come from the algorithm (R2).** Labels are produced entirely by the code in the repository. No manual labelling, no manual correction of output and no frame-specific rules were used.
-- **External tuning only (R9).** Every parameter was set from literature, football knowledge or external open data (Sportec/IDSSE). No parameter was selected using the competition match, the public ground truth or the video. At run time the pipeline fits three small models on the match's own tracking using pseudo-labels from our own algorithm, with no human label, no ground truth and no video (section 2.5), which RULES.md allows as learning without human labels. [SJEKK: Morten – the earlier wording "all training and calibration on external data only" was not accurate for the run-time fitting; confirm this wording or switch the fitting off.]
-- **Public ground truth (R3).** The public 5-minute ground truth was used only to verify that the pipeline runs end-to-end. No full ground truth, and nothing derived from it, was used.
+- **External training and tuning only (R9).** Every parameter and both trained models were set from literature, football knowledge or external open data (Sportec/IDSSE). No parameter or model was selected using the competition match, the public ground truth or the video. At run time the pipeline fits three small models on the match's own tracking using pseudo-labels from our own algorithm, with no human label, no ground truth and no video (section 2.5), which RULES.md allows as learning without human labels.
+- **Public ground truth (R3).** The public 5-minute ground truth was used only as a pipeline check: that the pipeline runs end-to-end and that its output is valid and not broken. No full ground truth, and nothing derived from it, was used.
 - **No video comparison (R8).** Our labels were never compared with the video, neither manually nor by "checking whether it looks right".
 - **No human-made data about this match.** No event data, hand-labelled data or other human-annotated data about this match were used.
-- **No cloud AI (R1).** No competition data, excerpts or outputs derived from them were shared with cloud-based AI services.
+- **No cloud AI (R1).** No competition data or excerpts of it were shared with cloud-based AI services.
 - **No data in the repository (R5).** No competition data are included in the repository or its history.
 - **Reproducible (R4).** One command reproduces the submitted file exactly (section 6).
 - **Everything external is listed (R7).** All external data, models and libraries are listed in section 7.

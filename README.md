@@ -14,7 +14,7 @@ question to answer with it.
 
 This repository is the organiser's starter repository plus our solution: a three-state (`H`/`A`/`D`)
 hidden Markov model over tracking-derived evidence, decoded with Viterbi. The code is in `src/`;
-the method is described in the technical document (`NEXT.md`, draft in [docs/NEXT.md](docs/NEXT.md)).
+the method is described in the technical document ([NEXT.md](NEXT.md)).
 
 **Requirements:** Python 3.13 (tested with 3.13.5). All dependencies are pinned to exact versions
 in `requirements.txt`. The match data is **not** in this repository.

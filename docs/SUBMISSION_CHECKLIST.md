@@ -140,7 +140,8 @@ Jeg har **ikke** antatt noe om disse. De bør med i neste e-post til arrangøren
 |---|---|
 | Lagnavn (limt inn fra påmelding) | NEXT (bekreft mot påmeldingen, se A3) |
 | Commit-hash (`main`) | |
-| SHA-256 av `NEXT.csv` | `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f` (Mac, Oskar, 15. nov, kode fra commit `8302bbf`) |
+| SHA-256 av `NEXT.csv` | `0ee0a0559d449b73e0c8e927c2d554939d9d28096a0d3b090aa27427677c568d` (Mac, Martin, 16. nov, med stoppdetektor og H/A-modell 2) |
+| SHA-256 av filen fra `--tagged` (modellen uten de to) | `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f` (Mac, Oskar 15. nov og Martin 16. nov fra ren klon) |
 | SHA-256 av reservefilen (`--hand-weighted`, forrige modell) | `67c0e624f7b3cc16ea832f04eb2d44f328216bfddac78ddbde4d33739a31280a` (Mac, Oskar, 15. nov) |
 | SHA-256 fra ren klon – Windows | |
 | SHA-256 fra ren klon – Mac | |

@@ -46,7 +46,8 @@ input gives the same bytes. The run prints `dead ball from: trained detector` wh
 detector (`src/dead_model.py`) was used and `home/away from: second model` when the second
 home-vs-away model (`src/team_model.py`) was. `--tagged` gives the model without them, whose
 `NEXT.csv` has SHA-256 `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`.
-The expected SHA-256 with the detector is in the technical document. To check the file:
+The expected SHA-256 of the default run is
+`0ee0a0559d449b73e0c8e927c2d554939d9d28096a0d3b090aa27427677c568d`. To check the file:
 
 ```bash
 python evaluation/validate_submission.py evaluation/results/NEXT.csv

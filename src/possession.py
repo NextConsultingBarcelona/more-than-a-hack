@@ -346,10 +346,17 @@ def _labels(decoded, blocks, n):
     return labels
 
 
-def decode(feats, dead_llr, tags, names, blocks, cfg=None):
+def decode(feats, dead_llr, tags, names, blocks, cfg=None, dead_evidence=None, team=None):
     """Labels 'H' / 'A' / 'D' / 'X' for every video frame, and a dict of diagnostics.
 
     blocks: [(first, last)] graded spans in video frames, inclusive. Frames outside are 'X'.
+    dead_evidence: dead-vs-alive evidence [T] from the trained stoppage detector
+    (dead_model.py). When given, the decoder uses it in place of its own dead-ball evidence.
+    With the learned evidence, the team evidence is built exactly as without the detector.
+    team: {"shape": team_model.shape_stats(...), "model": stored trees or None} for the second
+    home-vs-away model (team_model.py), or {"logit": its log-odds [T]} when they have been
+    computed already. When given and cfg.team_model is on, its log-odds take the place of the
+    first model's. If it fails, the first model's are kept and the diagnostics say why.
     """
     cfg = cfg or Config()
     n = feats.n
@@ -380,12 +387,28 @@ def decode(feats, dead_llr, tags, names, blocks, cfg=None):
         hint = hint_evidence(feats, ball_llr, dead_hand, blocks, cfg) if cfg.use_hint \
             else np.zeros(n)
         z_team, z_dead = learned.emissions(feats, ball_llr, hint, dead_hand, blocks)
+        used_team, team_problem = False, "switched off"
+        if cfg.team_model and team is not None:
+            try:
+                from . import team_model
+                z_team = team["logit"] if team.get("logit") is not None else team_model.logit(
+                    feats, ball_llr, hint, dead_hand, blocks, team["shape"], cfg, team.get("model"))
+                cfg = cfg.with_(refine_team_s=cfg.tm_refine_team_s)
+                used_team, team_problem = True, None
+            except Exception as exc:      # the first model's log-odds still give a valid file
+                team_problem = "failed with {}".format(type(exc).__name__)
         team_llr, dead_llr = learned_llr(z_team, z_dead, team_llr - ball_llr,
                                          dead_llr - dead_hand, graded, cfg)
+        if dead_evidence is not None:
+            dead_llr = dead_evidence
         decoded = decode_states(team_llr, dead_llr, ctrl, feats, blocks, set_piece_side, cfg)
         return _labels(decoded, blocks, n), {"ball_llr": ball_llr, "team_llr": team_llr,
-                                             "tag_polarity": polarity}
+                                             "tag_polarity": polarity,
+                                             "team_model_used": used_team,
+                                             "team_model_problem": team_problem}
 
+    if dead_evidence is not None:
+        dead_llr = dead_evidence
     hint = hint_evidence(feats, ball_llr, dead_llr, blocks, cfg) if cfg.use_hint else None
     if cfg.use_hint:
         team_llr += hint

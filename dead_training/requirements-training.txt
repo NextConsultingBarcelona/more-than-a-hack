@@ -1,0 +1,10 @@
+# Only for retraining the dead-ball detector (dead_training/). Not needed to produce the
+# submission: the pipeline in src/ reads the stored detector with numpy alone.
+# Exact versions, as used for the detector in models/dead_trees.npz (Python 3.13).
+-r ../external_validation/requirements-validation.txt
+
+scikit-learn==1.9.1
+joblib==1.6.0
+threadpoolctl==3.7.0
+narwhals==2.27.1
+cloudpickle==3.1.2

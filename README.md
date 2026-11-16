@@ -42,8 +42,11 @@ python -m src.pipeline --team-name NEXT --no-cache
 ```
 
 The pipeline uses no random numbers and all parameters are fixed in `src/config.py`, so the same
-input gives the same bytes: the expected SHA-256 of `NEXT.csv` is
-`f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`. To check the file:
+input gives the same bytes. The run prints `dead ball from: trained detector` when the stoppage
+detector (`src/dead_model.py`) was used and `home/away from: second model` when the second
+home-vs-away model (`src/team_model.py`) was. `--tagged` gives the model without them, whose
+`NEXT.csv` has SHA-256 `f12d15ce52ebeba71c6fa5c245e19bf061c4360a4b5e3ddebea4214a1d63ae6f`.
+The expected SHA-256 with the detector is in the technical document. To check the file:
 
 ```bash
 python evaluation/validate_submission.py evaluation/results/NEXT.csv
@@ -58,7 +61,11 @@ tracking dataset (Bundesliga 2022/23, licence CC-BY 4.0; match IDs J03WPY, J03WM
 J03WOY, J03WQQ, J03WR9). Credit: Bassek, M., Rein, R., Weber, H. et al. (2025). An integrated
 dataset of spatiotemporal and event data in elite soccer. *Scientific Data* 12, 195.
 doi:10.1038/s41597-025-04505-y. The tuning code and how to re-run it are in
-[external_validation/](external_validation/README.md). No pre-trained models are used.
+[external_validation/](external_validation/README.md). No third-party pre-trained models are used.
+Our own models were trained on the same open matches and are stored in the repository:
+`src/learned_model.json`, the stoppage detector `models/dead_trees.npz`
+([dead_training/](dead_training/README.md)) and the second home-vs-away model
+`models/team_trees.npz` ([team_training/](team_training/README.md)).
 
 Everything below this section is the organiser's original README.
 

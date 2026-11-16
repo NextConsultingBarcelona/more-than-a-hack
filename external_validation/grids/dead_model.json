@@ -1,0 +1,6 @@
+{
+  "model": "src.extval:predict_lomo",
+  "grid": {
+    "dead_model": [false, true]
+  }
+}

@@ -92,6 +92,30 @@ class Config:
     learned_dead_scale: float = 0.4
     learned_clip: float = 6.0      # cap on the log-odds of a single frame
 
+    # --- stoppage detector (dead_model.py), trained on open Sportec matches --------------------
+    # Leave-one-match-out over the seven matches, with the rest of the model unchanged: spellF1
+    # 0.568 against 0.556 on the validation data as built, and 0.54-0.56 against 0.39-0.53 when
+    # the ball is shown differently during stoppages (NEXT.md 5.8). The decode values were
+    # chosen on the five tuning matches. dead_model=False gives the model without the detector.
+    dead_model: bool = True        # stoppages from the detector; False = the evidence above
+    dm_cost: float = 70.0          # log-odds a stoppage must pay to begin, and again to end
+    dm_bias: float = -3.0          # added to the log-odds per frame: lean towards "play goes on"
+    dm_clip: float = 8.0           # cap on |log-odds| per frame
+    dm_min_dead_s: float = 2.0     # same floor as min_dead_s below
+    dm_min_alive_s: float = 1.0    # a live gap shorter than this inside a stoppage is closed
+    dm_weight: float = 30.0        # the detector's stoppages are hard evidence for the state model
+    dm_share_lo: float = 0.08      # plausibility guard on the detector's output: share of dead
+    dm_share_hi: float = 0.70      #   ball in the assessed frames ...
+    dm_stops_lo: float = 30.0      #   ... and stoppages per 90 minutes. Outside: evidence above.
+    dm_stops_hi: float = 220.0
+
+    # --- second home-vs-away model (team_model.py), trained on open Sportec matches ------------
+    # More local detail around the ball and the two teams as collectives, trained on ownership
+    # labels in which an uncontrolled touch is not a change of possession (NEXT.md 5.9).
+    # team_model=False gives the home-vs-away evidence of learned.py alone.
+    team_model: bool = True
+    tm_refine_team_s: float = 0.0  # with it, a change of possession stays where the model puts it
+
     # --- state model ---------------------------------------------------------------------------
     # Chosen with the learned evidence (train_emissions.py). With learned=False the values
     # tuned for the hand-weighted evidence were 3.0 / 6.5 / 6.0 (grids/next_hmm.json).
@@ -115,9 +139,15 @@ class Config:
 
     def hand_weighted(self):
         """The model as it was before the learned evidence: hand-weighted evidence and the
-        transition costs tuned for it (external_validation/grids/next_hmm.json)."""
+        transition costs tuned for it (external_validation/grids/next_hmm.json), without the
+        stoppage detector and the second home-vs-away model."""
         return replace(self, learned=False, c_switch=3.0, c_die=6.5, c_restart=6.0,
-                       kick_late=False)
+                       kick_late=False, dead_model=False, team_model=False)
+
+    def tagged(self):
+        """The model first tagged phase1-submission: the learned evidence of learned.py without
+        the stoppage detector and without the second home-vs-away model."""
+        return replace(self, dead_model=False, team_model=False)
 
     def with_(self, **changes):
         return replace(self, **changes)
